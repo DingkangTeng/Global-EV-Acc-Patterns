@@ -8,3 +8,5 @@ from .newZealand import newZealand
 from .openChargerMap import openChargerMap
 from .plugShare import plugShare
 from .tvip import tvip
+from .mergeByMaxRecord import mergeByMaxRecord
+from .amap import amap

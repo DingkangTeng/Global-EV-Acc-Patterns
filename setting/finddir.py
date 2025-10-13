@@ -1,6 +1,6 @@
 import os
 
-PIRIORITY = ['csv', 'shp', 'xlsx', 'geojson']
+PIRIORITY = ["csv", "shp", "xlsx", "geojson"]
 
 def findFiles(root: str) -> list[str]:
     result = []

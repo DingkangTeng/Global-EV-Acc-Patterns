@@ -1,16 +1,19 @@
 import geopandas as gpd
 
 from .generalResult import generalResult
-from setting import readFile, STANDER_NAME
+from setting import readFile
 
 __STANDER_COL = [
     "uid",
     "latitude", "longitude",
+    "country_code", "locality"
 ]
 
 __COL_MAP = {
     "lat": "latitude",
-    "lng": "longitude"
+    "lng": "longitude",
+    "level1": "country_code",
+    "level3": "locality"
 }
 
 def plugShare(file: str | tuple[str, str]) -> tuple[gpd.GeoDataFrame | None, list[list]| None]: # Result, Country, Staion number, Points number
@@ -19,10 +22,12 @@ def plugShare(file: str | tuple[str, str]) -> tuple[gpd.GeoDataFrame | None, lis
         return None, None
 
     df["level2"] = [None] * df.shape[0]
-    df["level3"] = [None] * df.shape[0]
+    
+    countryGroup = df.groupby("country_code").size().reset_index(name="num")
 
     return generalResult(
-        df, fileName, "uid", __COL_MAP
-    ), [[
-        fileName, STANDER_NAME.get(fileName.split('.')[0]), df.shape[0], None
-    ]]
+        df, fileName, "uid", __COL_MAP,
+        specialLevel1="country_code"
+    ), [
+        [fileName, row.country_code, row.num, None] for row in countryGroup.itertuples()
+    ]

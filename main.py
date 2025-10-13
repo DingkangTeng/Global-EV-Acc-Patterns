@@ -45,6 +45,8 @@ def main(root: str, result: str, formats: int = 0) -> None:
                 df, subcount = plugShare(filePath)
             elif source =="tvip":
                 df, subcount = tvip(filePath)
+            elif source == "amap":
+                df, subcount = amap(filePath)
             else:
                 continue
             
@@ -55,9 +57,9 @@ def main(root: str, result: str, formats: int = 0) -> None:
             
             df.drop_duplicates(subset=["UUID"], inplace=True)
             if formats > 10:
-                df.to_csv(os.path.join(result, "{}.{}".format(country, FORMAT.get(formats, 0))), index=False, encoding="utf-8")
+                df.to_csv(os.path.join(result, "{}.csv".format(country)), index=False, encoding="utf-8")
             else:
-                df.to_file(os.path.join(result, "{}.{}".format(country, FORMAT.get(formats, 0))), index=False, encoding="utf-8")
+                df.to_file(os.path.join(result, "{}.{}".format(country, FORMAT.get(formats, "csv"))), index=False, encoding="utf-8")
             
     
     pd.DataFrame(count, columns=["fileName", "country", "stationNum", "pointsNum"]).to_excel(os.path.join(result, "summary.xlsx"), index=False)
@@ -68,3 +70,4 @@ if __name__ == "__main__":
     root = r"Data Source 2025"
     result = r"Global_Country_2025"
     main(root, result, 0)
+    mergeByMaxRecord(result)

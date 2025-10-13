@@ -15,7 +15,9 @@ STANDER_NAME = {
     "Macau_ev_stations_2025": "MAC",
     "EV_Roam_charging_stations_8533884045861215045": "NZL",
     "EVCharger": "OCM",
-    "charger_shp": "PlugShare"
+    "charger_shp": "PlugShare",
+    "all_charger_data_combined": "PlugShare",
+    "chn2025": "CHN"
 }
 
 # Output
