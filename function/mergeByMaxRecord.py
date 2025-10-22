@@ -1,6 +1,7 @@
 import os
 import pandas as pd
 import geopandas as gpd
+import numpy as np
 from iso3166 import countries as countryDict
 
 from setting import STANDER_NAME
@@ -15,19 +16,21 @@ def __convertISO2(id: str) -> str:
         return countryDict.get(id).alpha3
 
 def mergeByMaxRecord(path: str) -> None:
-    f = "summary.xlsx"
-    for f in os.listdir(path):
-        if f[-4:] == "xlsx": break
-    record = pd.read_excel(os.path.join(path, f))
+    record = pd.read_excel(os.path.join(path, "summary.xlsx"))
     record = record[record["country"] != "Test"]
     record.loc[:, "country"] = record["country"].fillna("NA") # one country code is NA and is recorgized as nan
     # get iso3
     record["country_std"] = record["country"].apply(lambda x: __convertISO2(x))
     countryMap = dict(zip(record["country"], record["country_std"]))
     # find the max record
-    record = record.sort_values(["stationNum", "pointsNum"], ascending=False).drop_duplicates(subset="country_std")
+    unoffical = record["fileName"].isin(["all_charger_data_combined.csv", "EVCharger.gdb"])
+    recordOffical = record[~unoffical]
+    recordUnoffical = record[unoffical]
+    recordUnoffical = recordUnoffical.sort_values(["stationNum", "pointsNum"], ascending=False)
+    record = pd.concat([recordOffical, recordUnoffical]).drop_duplicates(subset="country_std")
     # stander file name
     record["fileName"] = record["fileName"].str.split('.').str[0].map(STANDER_NAME)
+    record.to_csv(os.path.join(path, "merge_log.csv"), encoding="utf-8", index=False)
     
     # merge file
     dfs = []
@@ -40,7 +43,28 @@ def mergeByMaxRecord(path: str) -> None:
         df = df[df["level1"].isin(countries)]
         dfs.append(df)
 
-    df = gpd.GeoDataFrame(gpd.pd.concat(dfs))
+    df = gpd.pd.concat(dfs)
+    # Split disputed areas
+    newDis =[]
+    dis = record[record["country_std"].str.len() > 3]
+    for row in dis.itertuples():
+        country: str = getattr(row, "country_std")
+        file = getattr(row, "fileName")
+        countryList = country.split('/')
+        for c in countryList:
+            fileExist = record[record["country_std"] == c]["fileName"].to_list()
+            if len(fileExist) == 0:
+                fileExist = file
+            else:
+                fileExist = fileExist[0]
+            if fileExist == file:
+                addDis = df[df["level1"] == country].copy()
+                addDis["level1"] = c
+                newDis.append(addDis)
+    
+    df = df[df["level1"].str.len() < 4]
+    df = gpd.GeoDataFrame(pd.concat([df] + newDis))
+    
     df.to_file(os.path.join(path, "merge.gpkg"), driver="GPKG", layer="evcs", encoding="utf-8")
 
     return

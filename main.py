@@ -67,7 +67,7 @@ def main(root: str, result: str, formats: int = 0) -> None:
     return
 
 if __name__ == "__main__":
-    root = r"Data Source 2025"
-    result = r"Global_Country_2025"
-    main(root, result, 0)
-    mergeByMaxRecord(result)
+    ROOT = r"_Data\\Data Source 2025"
+    RESULT = r"_Data\\Global_Country_2025"
+    main(ROOT, RESULT, 0)
+    mergeByMaxRecord(RESULT)

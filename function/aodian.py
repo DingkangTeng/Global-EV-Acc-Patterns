@@ -13,8 +13,8 @@ __STANDER_COL = [
 __COL_MAP = {
     "level2": "stationdistrict",
     "level3": "stationsubdistrict",
-    "lat": "stationlatitude",
-    "lng": "stationlongitude"
+    "lat": "stationlongitude",
+    "lng": "stationlatitude"
 }
 
 def aodian(file: str | tuple[str, str]) -> tuple[gpd.GeoDataFrame | None, list[list]| None]: # Result, Country, Staion number, Points number

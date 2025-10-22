@@ -22,6 +22,8 @@ def amap(
     df, fileName = readFile(file, usecols=__STANDER_COL, filters=filters, encoding="utf-8")
     if df is None or fileName is None:
         return None, None
+    
+    df = df[~df["cityname"].isin([u"香港特别行政区", u"澳门特别行政区", u"台湾省"])]
 
     return generalResult(
         df, fileName, "name", __COL_MAP
