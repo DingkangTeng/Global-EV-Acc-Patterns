@@ -107,7 +107,7 @@ class calDensity:
     
     def calOneUnitByRaster(self, rasterPath: str, evcsGeo: gpd.GeoDataFrame, unit: str) -> np.floating | None:
         boundary = self.boundaies.loc[self.boundaies[BOUNDART.get(self.unitsname)] == unit].geometry
-        if boundary is None or len(evcsGeo) == 0:
+        if len(boundary) == 0 or len(evcsGeo) == 0:
             return None
         
         with rio.open(rasterPath) as src:            
@@ -196,10 +196,10 @@ if __name__ == "__main__":
     RESULT = r"_Data\\Global_Country_2025"
     a = calDensity(RESULT, maxThread=16)
     # a.calDensity(r"C:\\0_PolyU\\global_gdp\\gdp_2020.tif", "GDP")
-    a.calDensity(r"D:\\roadsGraph_Clean", ("mainRoad", {"motorway", "motorway_link", "trunk", "trunk_link"}))
-
-    # evcsGeo = a.evcs.loc[(a.evcs[a.unitsname] == "JPN"), ["geometry"]]
-    # print(a.calOneUnitByRoad(r"D:\\roadsGraph_Clean", evcsGeo, "JPN", {"motorway", "motorway_link"}))
+    # a.calDensity(r"D:\\roadsGraph_Clean", ("mainRoad", {"motorway", "motorway_link", "trunk", "trunk_link"}))
+    a.calDensity(r"C:\\0_PolyU\\globalPOI_2015\\POI_1.tif", "POI_01")
+    a.calDensity(r"C:\\0_PolyU\\globalPOI_2015\\POI_2.tif", "POI_02")
+    a.calDensity(r"C:\\0_PolyU\\globalPOI_2015\\POI_3.tif", "POI_03")
 
     a.saveResult()
 
