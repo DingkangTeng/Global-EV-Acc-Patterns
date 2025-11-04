@@ -5,7 +5,7 @@ import pandas as pd
 import numpy as np
 from shapely.geometry import LineString
 from tqdm import tqdm
-from rasterio import mask
+from rasterio.mask import mask
 from concurrent.futures import as_completed, ThreadPoolExecutor, ProcessPoolExecutor
 from threading import Lock
 
@@ -82,6 +82,7 @@ class calDensity:
         # Process
         excutor = ProcessPoolExecutor(max_workers=self.maxThread) if isinstance(calType, tuple) else ThreadPoolExecutor(max_workers=self.maxThread)
         for unit in self.units:
+            bar.set_description("Processing {}".format(unit))
             evcsGeo = self.evcs.loc[(self.evcs[self.unitsname] == unit), ["geometry"]]
             future = excutor.submit(self.calOneUnitByRaster, path, evcsGeo, unit) if not isinstance(calType, tuple) \
                 else excutor.submit(self.calOneUnitByRoad, path, evcsGeo, (self.unitsname, unit), self.buffer, self.decay, calType[1])
@@ -110,13 +111,13 @@ class calDensity:
         if len(boundary) == 0 or len(evcsGeo) == 0:
             return None
         
-        with rio.open(rasterPath) as src:            
+        with rio.open(rasterPath, options=["NUM_THREADS=ALL_CPUS"]) as src:            
             croppedArray: np.ndarray
-            croppedArray, croppedTransform = mask.mask(
+            croppedArray, croppedTransform = mask(
                 src,
                 boundary,
                 crop=True,
-                all_touched=False,
+                all_touched=True,
                 nodata=src.nodata
             )
             
@@ -195,12 +196,14 @@ class calDensity:
 if __name__ == "__main__":
     RESULT = r"_Data\\Global_Country_2025"
     a = calDensity(RESULT, maxThread=16)
-    # a.calDensity(r"C:\\0_PolyU\\global_gdp\\gdp_2020.tif", "GDP")
+    a.calDensity(r"C:\\0_PolyU\\global_gdp\\gdp_2020.tif", "GDP")
     # a.calDensity(r"D:\\roadsGraph_Clean", ("mainRoad", {"motorway", "motorway_link", "trunk", "trunk_link"}))
-    a.calDensity(r"C:\\0_PolyU\\globalPOI_2015\\POI_1.tif", "POI_01")
-    a.calDensity(r"C:\\0_PolyU\\globalPOI_2015\\POI_2.tif", "POI_02")
-    a.calDensity(r"C:\\0_PolyU\\globalPOI_2015\\POI_3.tif", "POI_03")
+    # a.calDensity(r"C:\\0_PolyU\\globalPOI_2025\\POI_1.tif", "POI_01")
+    # a.calDensity(r"C:\\0_PolyU\\globalPOI_2025\\POI_2.tif", "POI_02")
+    # a.calDensity(r"C:\\0_PolyU\\globalPOI_2025\\POI_3.tif", "POI_03")
 
     a.saveResult()
+    # evcsGeo = a.evcs.loc[(a.evcs[a.unitsname] == "VCT"), ["geometry"]]
+    # a.calOneUnitByRaster(r"C:\0_PolyU\globalPOI_2025\POI_2.tif", evcsGeo,"VCT")
 
     

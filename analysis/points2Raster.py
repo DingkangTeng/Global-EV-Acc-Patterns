@@ -11,7 +11,7 @@ class points2Raster:
     ]
 
     def __init__(self, rasterPath: str, pointsPath: str | tuple[str, str]) -> None:
-        with rio.open(rasterPath) as src:
+        with rio.open(rasterPath, options=["NUM_THREADS=ALL_CPUS"]) as src:
             self.crs = src.crs
             self.transform = src.transform
             self.shape = src.shape
@@ -50,7 +50,8 @@ class points2Raster:
             dtype=np.uint32,
             crs=self.crs,
             transform=self.transform,
-            compress="lzw"
+            compress="lzw",
+            options=["NUM_THREADS=ALL_CPUS"]
         ) as dst:
             dst.write(resultRaster, 1)
 
