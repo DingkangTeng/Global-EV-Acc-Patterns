@@ -10,3 +10,4 @@ from .plugShare import plugShare
 from .tvip import tvip
 from .mergeByMaxRecord import mergeByMaxRecord
 from .amap import amap
+from .gogoEV import gogoEV

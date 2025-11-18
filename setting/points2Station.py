@@ -6,7 +6,7 @@ def points2Station(
     df: pd.DataFrame | gpd.GeoDataFrame, level1: str, idCol: str, typeCol: str
 ) -> tuple[pd.DataFrame | gpd.GeoDataFrame, tuple[np.ndarray, np.ndarray, np.ndarray]]: # Result, Country based Staion number, Points number
     
-    stations = df.groupby([level1])[idCol].count()
+    stations = df.groupby([level1])[idCol].nunique()
 
     powerCounts = (
         df

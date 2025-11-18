@@ -47,6 +47,8 @@ def main(root: str, result: str, formats: int = 0) -> None:
                 df, subcount = tvip(filePath)
             elif source == "amap":
                 df, subcount = amap(filePath)
+            elif source == "GogoEV":
+                df, subcount = gogoEV(filePath)
             else:
                 continue
             

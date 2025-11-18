@@ -23,6 +23,11 @@ def decayFunc(distance, d0, func: str) -> float:
             Gaussian decay function; \
         ")
 
+def get_utm_zone(lat: float, lon: float) -> str:
+    zone = int((lon + 180) // 6) + 1
+    hemisphere = 'north' if lat >= 0 else 'south'
+    return f"EPSG:326{zone:02d}" if hemisphere == 'north' else f"EPSG:327{zone:02d}"
+
 class calDensity:
     __slots__ = [
         "evcs",
@@ -63,7 +68,7 @@ class calDensity:
 
         return
 
-    def calDensity(self, path: str, calType: str | tuple[str, set[str]]) -> None:
+    def calDensity(self, path: str, calType: str | tuple[str, set[str]], additionalSave: str | None = None) -> None:
         futures = []
         futuresDict = {}
         bar = tqdm(total=len(self.units) * 2, desc="Processing")
@@ -85,7 +90,7 @@ class calDensity:
             bar.set_description("Processing {}".format(unit))
             evcsGeo = self.evcs.loc[(self.evcs[self.unitsname] == unit), ["geometry"]]
             future = excutor.submit(self.calOneUnitByRaster, path, evcsGeo, unit) if not isinstance(calType, tuple) \
-                else excutor.submit(self.calOneUnitByRoad, path, evcsGeo, (self.unitsname, unit), self.buffer, self.decay, calType[1])
+                else excutor.submit(self.calOneUnitByRoad, path, evcsGeo, (self.unitsname, unit), self.buffer, self.decay, calType[1], additionalSave)
             futures.append(future)
             futuresDict[future] = unit
             bar.update(1)
@@ -141,7 +146,8 @@ class calDensity:
         evcsGeo: gpd.GeoDataFrame,
         unit: tuple[str, str],
         buffers: int, decay: str,
-        roadsLevel: set[str]
+        roadsLevel: set[str],
+        savePath: str | None = None
     ) -> float | None:
         
         if unit[0] == "level1":
@@ -151,7 +157,7 @@ class calDensity:
             raise RuntimeError("Only support country level (level1) at present.")
         
         roads = gpd.read_file(roadsPath, layer=layer, encoding="utf-8")
-        roads = roads[["length", "highway", "geometry"]]
+        roads = roads[["u", "v", "key", "length", "highway", "geometry"]]
         # Filter by roads level
         mask = [
             bool(set(x if isinstance(x, list) else [x]) & roadsLevel) for x in roads["highway"]
@@ -162,9 +168,13 @@ class calDensity:
         if roads.crs is None:
             raise RuntimeError("Roads do not have correct crs.")
 
-        roads.to_crs(epsg=4479, inplace=True)
+        centroid = roads.union_all().centroid
+        utm_zone = get_utm_zone(centroid.y, centroid.x)
+        roads = roads.to_crs(utm_zone)
+        # roads.to_crs(epsg=4479, inplace=True)
         roadsBuffer = roads.buffer(buffers)
-        evcsGeo.to_crs(epsg=4479, inplace=True)
+        # evcsGeo.to_crs(epsg=4479, inplace=True)
+        evcsGeo = evcsGeo.to_crs(utm_zone)
         evcsIdx = evcsGeo.sindex
 
         results = np.empty([roads.shape[0]], dtype=np.float64)
@@ -190,14 +200,37 @@ class calDensity:
         roads.fillna(0, inplace=True)
         roads["roadsDens"] = roads["roadsDens"] * roads["length"]
 
+        if savePath is not None:
+            roads.to_crs(epsg=4326, inplace=True)
+            roads.to_file(os.path.join(savePath, "{}.gpkg".format(unit[1])), layer="edges", encoding="utf-8")
+
+            # Add nodes
+            nodes = gpd.read_file(roadsPath, layer="nodes", encoding="utf-8")
+            nodes = nodes[["osmid", "x", "y", "geometry"]]
+            keys = set(roads["u"]).union(set(roads["v"]))
+            nodes = nodes[nodes["osmid"].isin(keys)]
+            nodes.to_file(os.path.join(savePath, "{}.gpkg".format(unit[1])), layer="nodes", encoding="utf-8")
+
         return roads["roadsDens"].sum() / roads["length"].sum()
 
 # Debug
 if __name__ == "__main__":
-    RESULT = r"_Data\\Global_Country_2025"
+    RESULT = r"_Data\\Global_Country_2025" # Path where the merged EVCS data is saved
     a = calDensity(RESULT, maxThread=16)
-    a.calDensity(r"C:\\0_PolyU\\global_gdp\\gdp_2020.tif", "GDP")
-    # a.calDensity(r"D:\\roadsGraph_Clean", ("mainRoad", {"motorway", "motorway_link", "trunk", "trunk_link"}))
+    # a.calDensity(r"C:\\0_PolyU\\global_gdp\\gdp_2020.tif", "GDP")
+    # # a.calOneUnitByRoad(
+    # #     r"D:\\roadsGraph_Clean",
+    # #     a.evcs.loc[(a.evcs[a.unitsname] == "USA"), ["geometry"]],
+    # #     ("level1", "USA"),
+    # #     a.buffer, a.decay,
+    # #     {"motorway", "motorway_link", "trunk", "trunk_link"},
+    # #     savePath=r"D:"
+    # # )
+    a.calDensity(
+        r"D:\\roadsGraph_Clean", # Root path of roads data
+        ("mainRoad", {"motorway", "motorway_link", "trunk", "trunk_link", "primary", "primary_link"}),
+        os.path.join(RESULT, "density_roads")
+    )
     # a.calDensity(r"C:\\0_PolyU\\globalPOI_2025\\POI_1.tif", "POI_01")
     # a.calDensity(r"C:\\0_PolyU\\globalPOI_2025\\POI_2.tif", "POI_02")
     # a.calDensity(r"C:\\0_PolyU\\globalPOI_2025\\POI_3.tif", "POI_03")

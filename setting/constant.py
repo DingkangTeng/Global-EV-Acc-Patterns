@@ -10,6 +10,7 @@ STANDER_NAME = {
     "USA_alt_fuel_stations (Sep 1 2025)": "USA",
     "driveSouthAfrica": "ZAF",
     "charging_points_EU_0801_read": "EUCommission",
+    "goGoEV": "JPN",
     u"香港島_停车场": "HKG",
     "Macau Chargers": "MAC",
     "KOR": "KOR",
