@@ -1,11 +1,5 @@
-import geopandas as gpd
-import sys
+import time, os
 
-print(sys.path)
+time.sleep(3600*2)
 
-df = gpd.read_file("_Data/built_up_area/GHUB2018.gpkg")
-
-print(df)
-
-
-print(sys.executable)
+os.mkdir("timeDelay")

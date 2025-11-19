@@ -201,6 +201,7 @@ class calDensity:
         roads["roadsDens"] = roads["roadsDens"] * roads["length"]
 
         if savePath is not None:
+            None if os.path.exists(savePath) else os.makedirs(savePath)
             roads.to_crs(epsg=4326, inplace=True)
             roads.to_file(os.path.join(savePath, "{}.gpkg".format(unit[1])), layer="edges", encoding="utf-8")
 
@@ -215,8 +216,8 @@ class calDensity:
 
 # Debug
 if __name__ == "__main__":
-    RESULT = r"_Data\\Global_Country_2025" # Path where the merged EVCS data is saved
-    a = calDensity(RESULT, maxThread=16)
+    RESULT = r"_Data/Global_Country_2025" # Path where the merged EVCS data is saved
+    a = calDensity(RESULT, maxThread=64)
     # a.calDensity(r"C:\\0_PolyU\\global_gdp\\gdp_2020.tif", "GDP")
     # # a.calOneUnitByRoad(
     # #     r"D:\\roadsGraph_Clean",
@@ -227,7 +228,7 @@ if __name__ == "__main__":
     # #     savePath=r"D:"
     # # )
     a.calDensity(
-        r"D:\\roadsGraph_Clean", # Root path of roads data
+        r"_Data/roadsGraph_Clean", # Root path of roads data
         ("mainRoad", {"motorway", "motorway_link", "trunk", "trunk_link", "primary", "primary_link"}),
         os.path.join(RESULT, "density_roads")
     )

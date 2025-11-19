@@ -62,7 +62,7 @@ def oneCountryPop(urban: gpd.GeoDataFrame, pop: str) -> gpd.GeoDataFrame:
 
 if __name__ == "__main__":
     # Urban area file path
-    urban = gpd.read_file(r"C:\0_PolyU\data-global-ev-2025\_Data\urbanArea\urban_countries.geojson", encoding="utf-8")
+    urban = gpd.read_file(r"_Data/built_up_area/UB_2018.shp", encoding="utf-8")
     urban = urban[["GID_0", "GID_2", "NAME_1", "NAME_2", "geometry"]]
 
     # Country list
