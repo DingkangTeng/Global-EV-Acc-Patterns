@@ -35,4 +35,4 @@ StandardNames = {
 df["Country"] = df["Country"].apply(lambda x: StandardNames.get(x, x))
 df["iso3"] = df["Country"].apply(lambda x: countries.get(x).alpha3)
 
-df.to_file("_Data/built_up_area/{}.shp".format(layer), index=False)
+df.to_file("_Data/built_up_area/{}.gpkg".format(layer), index=False)

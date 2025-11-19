@@ -4,11 +4,15 @@ import pandas as pd
 import numpy as np
 import rasterio as rio
 from shapely.geometry.base import BaseGeometry
+from shapely.geometry import box
 from rasterio.mask import mask
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from tqdm import tqdm
 
-def calPop(countries: set[str], urbans: gpd.GeoDataFrame, pops: str, savePath: str, maxThread: int = 1) -> None:
+from __init__ import LACK_POP
+
+def calPop(countries: set[str], urbansTuple: tuple[gpd.GeoDataFrame, str], pops: str, savePath: str, maxThread: int = 1) -> None:
+    urbans, col = urbansTuple
     if urbans.crs is None:
         raise RuntimeError("GeoDataFrame has no CRS.")
     
@@ -17,7 +21,15 @@ def calPop(countries: set[str], urbans: gpd.GeoDataFrame, pops: str, savePath: s
     futuresDict = {}
     with ProcessPoolExecutor(max_workers=maxThread) as executor:
         for country in countries:
-            urban = urbans.loc[urbans["GID_0"] == country]
+            # Urban area: USA contains PRI
+            if country == "PRI":
+                urban = urbans.loc[urbans[col] == "USA"]
+            # Skip Kosovo, Åland, Guernsey, Gibraltar, Svalbard and Jan Mayen, Jersey (No population data)
+            if country in LACK_POP:
+                bar.update()
+                continue
+            else:
+                urban = urbans.loc[urbans[col] == country]
             rasterPath = os.path.join(pops, "{}_allGender_allAge_merge.tif".format(country))
             with rio.open(rasterPath) as src:
                 crs = src.crs.to_epsg()
@@ -48,7 +60,12 @@ def oneCountryPop(urban: gpd.GeoDataFrame, pop: str) -> gpd.GeoDataFrame:
     with rio.open(pop, options=["NUM_THREADS=ALL_CPUS"]) as src:
         for row in urban.itertuples():
             idx: int = getattr(row, "Index")
-            geom = getattr(row, "geometry")
+            geom: BaseGeometry = getattr(row, "geometry")
+
+            # Urban area: USA contains PRI
+            if not geom.intersects(box(*src.bounds)):
+                bar.update()
+                continue
 
             outImage, _ = mask(src, [geom], crop=True, all_touched=True, nodata=src.nodata)
             outImage[outImage == src.nodata] = 0
@@ -57,22 +74,27 @@ def oneCountryPop(urban: gpd.GeoDataFrame, pop: str) -> gpd.GeoDataFrame:
             bar.update()
     
     urban.drop_duplicates(subset=["geometry"], inplace=True)
+    urban.drop(urban[urban["population"] == 0.0].index, inplace=True)
     bar.close()
+
     return urban     
 
 if __name__ == "__main__":
     # Urban area file path
-    urban = gpd.read_file(r"_Data/built_up_area/UB_2018.shp", encoding="utf-8")
-    urban = urban[["GID_0", "GID_2", "NAME_1", "NAME_2", "geometry"]]
+    urban = gpd.read_file(r"_Data/built_up_area/UB_2018.gpkg", encoding="utf-8")
+    urban = urban[["iso3", "geometry"]]
 
     # Country list
-    countries = pd.read_excel(r"C:\0_PolyU\data-global-ev-2025\_Data\Global_Country_2025\density.xlsx")
+    countries = pd.read_excel(r"_Data/Global_Country_2025/density.xlsx")
+    countries.dropna(subset="mainRoad", inplace=True)
     countries = set(countries["level1"].unique().tolist())
 
     # Population raster root path
-    pops = r"D:\Population_Related\population_All"
+    pops = r"_Data/population_All"
 
     # Root path of saved roads data with density col (save path//density_roads)
-    savePath = r"C:\0_PolyU\data-global-ev-2025\_Data\Global_Country_2025\test"
+    savePath = r"_Data/Global_Country_2025/density_roads"
 
-    calPop(countries, urban, pops, savePath, 16)
+    calPop(countries, (urban, "iso3"), pops, savePath, 32)
+    # # Test
+    # oneCountryPop(urban.loc[urban["iso3"] == "USA"], r"_Data/population_All/USA_allGender_allAge_merge.tif")
