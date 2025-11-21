@@ -1,4 +1,4 @@
-import os, gc
+import os, gc, traceback
 import osmnx as ox
 import networkx as nx
 import geopandas as gpd
@@ -29,6 +29,7 @@ def urbanConnecting(root: str, maxThread: int = 1) -> None:
                 popThres = 500000
 
             gpkg = os.path.join(root, file)
+            # gpkg = os.path.join(root, "HND.gpkg")
             # calOneCountry(gpkg, popThres)
             future = executor.submit(calOneCountry, gpkg, popThres)
             futureDict[future] = file
@@ -39,11 +40,12 @@ def urbanConnecting(root: str, maxThread: int = 1) -> None:
             country = futureDict[future]
             try:
                 result = future.result()
-            except Exception as e:
-                raise RuntimeError("{}: {}".format(country, e))
+            except Exception:
+                with open(os.path.join(root, "_log.txt"), 'a') as f:
+                    f.write(country + traceback.format_exc())
             else:
                 processed.append([country, result]) if result else None
-        pd.DataFrame(processed, columns=["iso3", "nationalRoadsDens"]).to_csv(os.path.join(root, "porcessed.csv"), encoding="utf-8")
+        pd.DataFrame(processed, columns=["iso3", "nationalRoadsDens"]).to_csv(os.path.join(root, "processed.csv"), encoding="utf-8", index=False)
 
     return
 
@@ -95,7 +97,7 @@ def calOneCountry(gpkg: str, popThres: int = 0) -> bool | float:
     gc.collect()
 
     # Simplify graph
-    total = len(urbanNodes) * (len(urbanNodes) - 1) // 2
+    total = len(urbanNodes) * (len(urbanNodes) - 1) #// 2
     bar = tqdm(total=total, desc="Calculating urban connecting of {}".format(gpkg), unit="paths")
     newEdges = np.empty([total], dtype=np.ndarray)
     newEdgesDens = np.empty([total, 2], dtype=np.float64)
@@ -103,17 +105,23 @@ def calOneCountry(gpkg: str, popThres: int = 0) -> bool | float:
     j = 0
     finalDens = 0.0
     finalLength = 0.0
-    for i, start in enumerate(urbanNodes[:-1]):
-        for end in urbanNodes[i+1:]:
+    # for i, start in enumerate(urbanNodes[:-1]):
+    #     for end in urbanNodes[i+1:]:
+    for start in urbanNodes:
+        endNodes = urbanNodes.copy()
+        endNodes.remove(start)
+        for end in endNodes:
             GCal = G
             try: length, path = nx.single_source_dijkstra(GCal, start, end, weight="length")
             except:
-                try:
-                    length, path = nx.single_source_dijkstra(GCal, end, start, weight="length")
-                except:
+                # try:
+                #     length, path = nx.single_source_dijkstra(GCal, end, start, weight="length")
+                # except:
                     GCal = G.to_undirected()
                     try: length, path = nx.single_source_dijkstra(GCal, start, end, weight="length")
-                    except: continue
+                    except:
+                        bar.update()
+                        continue
 
             # # Validate wheter is surrounding urban area
             # if any(n in urbanNodesSet and n not in (start, end) for n in path): continue
@@ -122,7 +130,6 @@ def calOneCountry(gpkg: str, popThres: int = 0) -> bool | float:
             resultPath = np.empty([len(path)-1], dtype=object)
             resultPathDens = 0.0
             k = 0
-            # paths = zip(path[:-1], path[1:]) if notreverse else zip(path[-1:0:-1], path[-2::-1])
             for u, v in zip(path[:-1], path[1:]):
                 edge = GCal[u][v]
                 # select the edge entry with the smallest 'length' value
@@ -140,7 +147,12 @@ def calOneCountry(gpkg: str, popThres: int = 0) -> bool | float:
             finalDens += resultPathDens
             finalLength += length
             bar.update()
-
+    
+    # No connected path
+    if j == 0:
+        bar.close()
+        return np.nan
+    
     # Save result
     df1 = pd.DataFrame(newEdgesDens[:j], columns=["roadsDens", "length"])
     df2 = pd.DataFrame(newEdgesNode[:j ], columns=["startNodeOSMid", "endNodeOSMid"])
@@ -157,5 +169,6 @@ def calOneCountry(gpkg: str, popThres: int = 0) -> bool | float:
 if __name__ == "__main__":
     # Root path of saved roads data with density col (save path//density_roads)
     ROOT = r"_Data/Global_Country_2025/density_roads"
+    # ROOT = r"_Data/test"
 
-    urbanConnecting(ROOT, maxThread=32)
+    urbanConnecting(ROOT, maxThread=64)

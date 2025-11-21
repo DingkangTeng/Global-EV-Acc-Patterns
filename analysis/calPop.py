@@ -83,6 +83,7 @@ if __name__ == "__main__":
     # Urban area file path
     urban = gpd.read_file(r"_Data/built_up_area/UB_2018.gpkg", encoding="utf-8")
     urban = urban[["iso3", "geometry"]]
+    urban["urbanId"] = urban.index
 
     # Country list
     countries = pd.read_excel(r"_Data/Global_Country_2025/density.xlsx")
