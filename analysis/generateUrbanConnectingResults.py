@@ -69,6 +69,7 @@ def generate(path: str, cities: gpd.GeoDataFrame) -> None:
         df["cityPop2"] = np.nan
         df["built-upId2"] = np.nan
         df["countryLevelDens"] = getattr(row, "nationalRoadsDens")
+        df["iso3"] = country
 
         # Check null data
         if len(osmid2Id) != len(pathNodes):
