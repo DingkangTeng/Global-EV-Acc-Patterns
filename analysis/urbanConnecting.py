@@ -54,6 +54,7 @@ def calOneCountry(gpkg: str, popThres: int = 0) -> bool | float:
     if "cities" not in gpd.list_layers(gpkg)["name"].to_list(): return False
 
     urbans = gpd.read_file(gpkg, layer="cities", encoding="utf-8")[["population", "geometry"]]
+    ################################################################## 加一个合并名称相同的建成区！
     urbans = urbans[urbans["population"] >= popThres]
 
     if popThres == 0 or urbans.shape[0] > 50:
