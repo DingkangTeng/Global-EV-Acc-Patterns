@@ -9,6 +9,8 @@ from rasterio.mask import mask
 from concurrent.futures import as_completed, ThreadPoolExecutor, ProcessPoolExecutor
 from threading import Lock
 
+from __init__ import eus
+
 BOUNDART = {
     "level1": "iso3_code"
 }
@@ -31,7 +33,7 @@ def get_utm_zone(lat: float, lon: float) -> str:
 class calDensity:
     __slots__ = [
         "evcs",
-        "units", "unitsname",
+        "units", "unitsname", "eu",
         "boundaies", "buffer", "decay",
         "result", "densityPath",
         "maxThread", "lock"
@@ -47,7 +49,13 @@ class calDensity:
         self.evcs = gpd.read_file(os.path.join(resultPath, "merge.gpkg"), layer="evcs", encoding="utf-8")[[unitsname, "geometry"]]
         self.boundaies = gpd.read_file(os.path.join(resultPath, "merge.gpkg"), layer=unitsname, encoding="utf-8") # from GAUL
         self.unitsname = unitsname
-        self.units = self.evcs[unitsname].unique().tolist()
+
+        countrylist = pd.read_csv(os.path.join(resultPath, "merge_log.csv"), encoding="utf-8")[["fileName", "country_std"]]
+        self.eu = countrylist[countrylist["fileName"] == "EUCommission"]["country_std"].tolist()
+        # Special case
+        self.eu, notEu = eus(resultPath)
+        # self.units = notEu + ["EUR_Merge"]
+        self.units =["EUR_Merge"] # Only cal eu now
         self.densityPath = os.path.join(resultPath, "density.xlsx")
         if os.path.exists(self.densityPath):
             self.result = pd.read_excel(self.densityPath).set_index(unitsname)
@@ -88,7 +96,8 @@ class calDensity:
         excutor = ProcessPoolExecutor(max_workers=self.maxThread) if isinstance(calType, tuple) else ThreadPoolExecutor(max_workers=self.maxThread)
         for unit in self.units:
             bar.set_description("Processing {}".format(unit))
-            evcsGeo = self.evcs.loc[(self.evcs[self.unitsname] == unit), ["geometry"]]
+            evcsGeo = self.evcs.loc[(self.evcs[self.unitsname] == unit), ["geometry"]] if unit != "EUR_Merge" \
+                else self.evcs.loc[(self.evcs[self.unitsname].isin(self.eu)), ["geometry"]]
             future = excutor.submit(self.calOneUnitByRaster, path, evcsGeo, unit) if not isinstance(calType, tuple) \
                 else excutor.submit(self.calOneUnitByRoad, path, evcsGeo, (self.unitsname, unit), self.buffer, self.decay, calType[1], additionalSave)
             futures.append(future)
@@ -112,9 +121,12 @@ class calDensity:
         return
     
     def calOneUnitByRaster(self, rasterPath: str, evcsGeo: gpd.GeoDataFrame, unit: str) -> np.floating | None:
-        boundary = self.boundaies.loc[self.boundaies[BOUNDART.get(self.unitsname)] == unit].geometry
+        boundary = self.boundaies.loc[self.boundaies[BOUNDART.get(self.unitsname)] == unit].geometry if unit != "EUR_Merge" \
+            else self.boundaies.loc[self.boundaies[BOUNDART.get(self.unitsname)].isin(self.eu)].geometry
         if len(boundary) == 0 or len(evcsGeo) == 0:
             return None
+        else:
+            boundary = boundary.union_all()
         
         with rio.open(rasterPath, options=["NUM_THREADS=ALL_CPUS"]) as src:            
             croppedArray: np.ndarray
@@ -171,9 +183,7 @@ class calDensity:
         centroid = roads.union_all().centroid
         utm_zone = get_utm_zone(centroid.y, centroid.x)
         roads = roads.to_crs(utm_zone)
-        # roads.to_crs(epsg=4479, inplace=True)
         roadsBuffer = roads.buffer(buffers)
-        # evcsGeo.to_crs(epsg=4479, inplace=True)
         evcsGeo = evcsGeo.to_crs(utm_zone)
         evcsIdx = evcsGeo.sindex
 
@@ -186,7 +196,7 @@ class calDensity:
             # Find evcs points
             possibleMatchesIdx = evcsIdx.intersection(buffer.bounds) # type: ignore
             possibleMatches = evcsGeo.iloc[possibleMatchesIdx]
-            evcsInBuffer = possibleMatches[possibleMatches.intersects(buffer)]
+            evcsInBuffer = possibleMatches[possibleMatches.intersects(buffer)] # type: ignore
 
             if len(evcsInBuffer) == 0 or geom.length == 0:
                 result = np.nan

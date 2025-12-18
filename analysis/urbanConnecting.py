@@ -19,18 +19,15 @@ def urbanConnecting(root: str, maxThread: int = 1) -> None:
     with ProcessPoolExecutor(max_workers=maxThread) as executor:
         for file in files:
             split = file.split('.')
-            if split[-1] != "gpkg": continue
-            if split[0] in LACK_POP: continue
+            if split[-1] != "gpkg" or split[0] in LACK_POP: continue
 
             # Cal pop threads
-            if split[0] in {"USA", "CHN"}:
+            if split[0] in {"USA", "CHN", "EUR_Merge"}:
                 popThres = 0
             else:
                 popThres = 500000
 
             gpkg = os.path.join(root, file)
-            # gpkg = os.path.join(root, "HND.gpkg")
-            # calOneCountry(gpkg, popThres)
             future = executor.submit(calOneCountry, gpkg, popThres)
             futureDict[future] = file
             futurses.append(future)
@@ -54,7 +51,6 @@ def calOneCountry(gpkg: str, popThres: int = 0) -> bool | float:
     if "cities" not in gpd.list_layers(gpkg)["name"].to_list(): return False
 
     urbans = gpd.read_file(gpkg, layer="cities", encoding="utf-8")[["population", "geometry"]]
-    ################################################################## 加一个合并名称相同的建成区！
     urbans = urbans[urbans["population"] >= popThres]
 
     if popThres == 0 or urbans.shape[0] > 50:
