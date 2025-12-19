@@ -54,8 +54,7 @@ class calDensity:
         self.eu = countrylist[countrylist["fileName"] == "EUCommission"]["country_std"].tolist()
         # Special case
         self.eu, notEu = eus(resultPath)
-        # self.units = notEu + ["EUR_Merge"]
-        self.units =["EUR_Merge"] # Only cal eu now
+        self.units = notEu + ["EUR_Merge"]
         self.densityPath = os.path.join(resultPath, "density.xlsx")
         if os.path.exists(self.densityPath):
             self.result = pd.read_excel(self.densityPath).set_index(unitsname)
@@ -228,15 +227,6 @@ class calDensity:
 if __name__ == "__main__":
     RESULT = r"_Data/Global_Country_2025" # Path where the merged EVCS data is saved
     a = calDensity(RESULT, maxThread=64)
-    # a.calDensity(r"C:\\0_PolyU\\global_gdp\\gdp_2020.tif", "GDP")
-    # # a.calOneUnitByRoad(
-    # #     r"D:\\roadsGraph_Clean",
-    # #     a.evcs.loc[(a.evcs[a.unitsname] == "USA"), ["geometry"]],
-    # #     ("level1", "USA"),
-    # #     a.buffer, a.decay,
-    # #     {"motorway", "motorway_link", "trunk", "trunk_link"},
-    # #     savePath=r"D:"
-    # # )
     a.calDensity(
         r"_Data/roadsGraph_Clean", # Root path of roads data
         ("mainRoad", {"motorway", "motorway_link", "trunk", "trunk_link", "primary", "primary_link"}),

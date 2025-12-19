@@ -5,6 +5,7 @@ import numpy as np
 import rasterio as rio
 from shapely.geometry.base import BaseGeometry
 from shapely.geometry import box
+from shapely import make_valid
 from rasterio.mask import mask
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from tqdm import tqdm
@@ -32,7 +33,13 @@ def calPop(countries: set[str], urbansTuple: tuple[gpd.GeoDataFrame, gpd.GeoData
         nearestCityIndex = cities.distance(urbanPoint).idxmin()
         urbanName.at[idx, "city"] = cities.at[nearestCityIndex, "city"]
     urbans["city"] = urbanName["city"]
+    urbans["urbanId"] = urbans["urbanId"].astype(str)
+    # Fixing geometry
+    tqdm.write("Fixing geometry...")
+    invalid_mask = ~urbans.geometry.is_valid
+    urbans.loc[invalid_mask, "geometry"] = urbans.loc[invalid_mask, "geometry"].apply(make_valid)
     # Disslove same city
+    tqdm.write("Dissolving geometry...")
     urbans = urbans.dissolve(
         by="city",
         aggfunc={
