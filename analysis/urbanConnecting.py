@@ -56,7 +56,7 @@ def calOneCountry(gpkg: str, popThres: float = 0) -> bool | float:
     # Skip null country:
     if "cities" not in gpd.list_layers(gpkg)["name"].to_list(): return False
 
-    urbans = gpd.read_file(gpkg, layer="cities", encoding="utf-8")[["population", "geometry"]]
+    urbans = gpd.read_file(gpkg, layer="cities", encoding="utf-8")[["population", "city", "urbanId", "geometry"]]
     urbans = urbans[urbans["population"] >= popThres]
 
     if urbans.shape[0] > 50:
@@ -92,15 +92,15 @@ def calOneCountry(gpkg: str, popThres: float = 0) -> bool | float:
     edges.drop(columns=["highway"], inplace=True)
     G = ox.graph_from_gdfs(nodes, edges)
     crs = edges.crs
-    del edges, nodes
+    del edges
     gc.collect()
 
     # Simplify graph
     total = len(urbanNodes) * (len(urbanNodes) - 1) #// 2
     bar = tqdm(total=total, desc="Calculating urban connecting of {}".format(gpkg), unit="paths")
     newEdges = np.empty([total], dtype=np.ndarray)
-    newEdgesDens = np.empty([total, 2], dtype=np.float64)
-    newEdgesNode = np.empty([total, 2], dtype=object)
+    newEdgesDens = np.empty([total, 4], dtype=np.float64)
+    newEdgesNode = np.empty([total, 6], dtype=object)
     j = 0
     finalDens = 0.0
     finalLength = 0.0
@@ -132,16 +132,22 @@ def calOneCountry(gpkg: str, popThres: float = 0) -> bool | float:
             for u, v in zip(path[:-1], path[1:]):
                 edge = GCal[u][v]
                 # select the edge entry with the smallest 'length' value
-                _, best_attrs = min(edge.items(), key=lambda kv: kv[1].get("length", np.inf))
-                resultPath[k] = best_attrs.get("geometry")
-                resultPathDens += best_attrs.get("roadsDens") * best_attrs.get("length")
+                _, bestAttrs = min(edge.items(), key=lambda kv: kv[1].get("length", np.inf))
+                resultPath[k] = bestAttrs.get("geometry")
+                resultPathDens += bestAttrs.get("roadsDens") * bestAttrs.get("length")
                 k += 1
 
             newEdges[j] = linemerge(resultPath)
             newEdgesDens[j, 0] = resultPathDens / length
             newEdgesDens[j, 1] = length
+            newEdgesDens[j, 2] = nodes.at[start, "population"] # type: ignore
+            newEdgesDens[j, 3] = nodes.at[end, "population"] # type: ignore
             newEdgesNode[j, 0] = start
-            newEdgesNode[j, 1] = end
+            newEdgesNode[j, 1] = nodes.at[start, "city"]
+            newEdgesNode[j, 2] = nodes.at[start, "urbanId"]
+            newEdgesNode[j, 3] = end
+            newEdgesNode[j, 4] = nodes.at[end, "city"]
+            newEdgesNode[j, 5] = nodes.at[end, "urbanId"]
             j += 1
             finalDens += resultPathDens
             finalLength += length
@@ -153,8 +159,14 @@ def calOneCountry(gpkg: str, popThres: float = 0) -> bool | float:
         return np.nan
     
     # Save result
-    df1 = pd.DataFrame(newEdgesDens[:j], columns=["roadsDens", "length"])
-    df2 = pd.DataFrame(newEdgesNode[:j ], columns=["startNodeOSMid", "endNodeOSMid"])
+    df1 = pd.DataFrame(
+        newEdgesDens[:j],
+        columns=["roadsDens", "length", "startCityPopulation", "endCityPopulation"]
+    )
+    df2 = pd.DataFrame(
+        newEdgesNode[:j],
+        columns=["startNodeOSMid", "startCity", "startUrbanID", "endNodeOSMid", "endCity", "endUrbanID"]
+    )
     gpd.GeoDataFrame(
         pd.concat([df1, df2], axis=1),
         geometry=newEdges[:j],
