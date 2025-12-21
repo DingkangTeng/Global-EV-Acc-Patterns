@@ -1,4 +1,4 @@
-import os, gc, traceback
+import os, gc, traceback, warnings
 import osmnx as ox
 import networkx as nx
 import geopandas as gpd
@@ -10,6 +10,12 @@ from tqdm import tqdm
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 from __init__ import LACK_POP
+
+warnings.filterwarnings(
+    "ignore", 
+    category=UserWarning,
+    message="Geometry is in a geographic CRS.*"
+)
 
 def urbanConnecting(root: str, maxThread: int = 1) -> None:
     files = os.listdir(root)
@@ -46,28 +52,24 @@ def urbanConnecting(root: str, maxThread: int = 1) -> None:
 
     return
 
-def calOneCountry(gpkg: str, popThres: int = 0) -> bool | float:
+def calOneCountry(gpkg: str, popThres: float = 0) -> bool | float:
     # Skip null country:
     if "cities" not in gpd.list_layers(gpkg)["name"].to_list(): return False
 
     urbans = gpd.read_file(gpkg, layer="cities", encoding="utf-8")[["population", "geometry"]]
     urbans = urbans[urbans["population"] >= popThres]
 
-    if popThres == 0 or urbans.shape[0] > 50:
+    if urbans.shape[0] > 50:
         # get the 51st smallest population if available, otherwise fall back to the smallest (or 0 if no rows)
         popsSorted = urbans["population"].sort_values(ascending=False).reset_index(drop=True)
 
-        if len(popsSorted) > 49:
-            popThres = int(popsSorted.iloc[49])
-        else:
-            popThres = popsSorted.max()
-        
+        popThres = popsSorted.iloc[50]
         del popsSorted
 
         urbans = urbans[urbans["population"] >= popThres]
 
     # Skip no urban record or sinle urban record
-    if urbans.shape[0] < 2: return False
+    elif urbans.shape[0] < 2: return False
 
     urbans["centeroid"] = urbans.geometry.centroid
     urbans.set_geometry("centeroid", inplace=True)
@@ -166,6 +168,5 @@ def calOneCountry(gpkg: str, popThres: int = 0) -> bool | float:
 if __name__ == "__main__":
     # Root path of saved roads data with density col (save path//density_roads)
     ROOT = r"_Data/Global_Country_2025/density_roads"
-    # ROOT = r"_Data/test"
 
     urbanConnecting(ROOT, maxThread=64)

@@ -15,6 +15,7 @@ def eus(resultPath: str) -> tuple[list[str], list[str]]:
     eu.remove("CYP") # Island
 
     notEu = countrylist[countrylist["fileName"] != "EUCommission"]["country_std"].tolist()
+    notEu = [x for x in notEu if len(x) < 4]
     notEu += ["IRL", "MLT", "CYP", "UKR", "MDA"]
 
     return eu, notEu

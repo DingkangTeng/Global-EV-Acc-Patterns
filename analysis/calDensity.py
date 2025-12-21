@@ -54,7 +54,7 @@ class calDensity:
         self.eu = countrylist[countrylist["fileName"] == "EUCommission"]["country_std"].tolist()
         # Special case
         self.eu, notEu = eus(resultPath)
-        self.units = notEu + ["EUR_Merge"]
+        self.units = notEu + self.eu + ["EUR_Merge"]
         self.densityPath = os.path.join(resultPath, "density.xlsx")
         if os.path.exists(self.densityPath):
             self.result = pd.read_excel(self.densityPath).set_index(unitsname)
@@ -89,7 +89,7 @@ class calDensity:
                     self.evcs = self.evcs.to_crs(src.crs)
         else: col = calType[0]
 
-        self.result[col] = np.nan if col not in self.result.columns else None
+        if col not in self.result.columns: self.result[col] = np.nan
 
         # Process
         excutor = ProcessPoolExecutor(max_workers=self.maxThread) if isinstance(calType, tuple) else ThreadPoolExecutor(max_workers=self.maxThread)
