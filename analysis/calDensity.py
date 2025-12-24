@@ -205,14 +205,14 @@ class calDensity:
 
             results[i] = result
 
-        roads["roadsDens_{}".format(buffers)] = results.copy()
+        roads["roadsDens"] = results.copy()
         roads.fillna(0, inplace=True)
         results = results * roads["length"]
 
         if savePath is not None:
             None if os.path.exists(savePath) else os.makedirs(savePath)
             roads.to_crs(epsg=4326, inplace=True)
-            roads.to_file(os.path.join(savePath, "{}.gpkg".format(unit[1])), layer="edges", encoding="utf-8")
+            roads.to_file(os.path.join(savePath, "{}.gpkg".format(unit[1])), layer="edges_{}".format(buffers), encoding="utf-8")
 
             # Add nodes
             nodes = gpd.read_file(roadsPath, layer="nodes", encoding="utf-8")
