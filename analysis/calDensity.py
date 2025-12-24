@@ -18,7 +18,7 @@ BOUNDART = {
 def decayFunc(distance, d0, func: str) -> float:
     """Gaussian decay function"""
     if func == "Gaussian":
-        return np.exp(-0.5 * (distance / d0) ** 2)
+        return (np.exp(-0.5 * (distance / d0) ** 2)  - np.exp(-0.5)) / (1 - np.exp(-0.5))
     else:
         raise RuntimeError(" \
             Unexceptional decay function. Available function: \n \
@@ -201,13 +201,13 @@ class calDensity:
                 result = np.nan
             else:
                 x = evcsInBuffer.geometry.apply(lambda pt: decayFunc(geom.distance(pt), buffers, decay))
-                result = x.sum() / geom.length
+                result = x.sum() / geom.length * 1000 # cout pre km
 
             results[i] = result
 
-        roads["roadsDens"] = results
+        roads["roadsDens_{}".format(buffers)] = results.copy()
         roads.fillna(0, inplace=True)
-        roads["roadsDens"] = roads["roadsDens"] * roads["length"]
+        results = results * roads["length"]
 
         if savePath is not None:
             None if os.path.exists(savePath) else os.makedirs(savePath)
@@ -221,22 +221,23 @@ class calDensity:
             nodes = nodes[nodes["osmid"].isin(keys)]
             nodes.to_file(os.path.join(savePath, "{}.gpkg".format(unit[1])), layer="nodes", encoding="utf-8")
 
-        return roads["roadsDens"].sum() / roads["length"].sum()
+        return results.sum() / roads["length"].sum()
 
 # Debug
 if __name__ == "__main__":
     RESULT = r"_Data/Global_Country_2025" # Path where the merged EVCS data is saved
-    a = calDensity(RESULT, maxThread=64)
-    a.calDensity(
-        r"_Data/roadsGraph_Clean", # Root path of roads data
-        ("mainRoad", {"motorway", "motorway_link", "trunk", "trunk_link", "primary", "primary_link"}),
-        os.path.join(RESULT, "density_roads")
-    )
+    for buffer in [1000, 3000, 5000]:
+        a = calDensity(RESULT, maxThread=64, buffer=buffer)
+        a.calDensity(
+            r"_Data/roadsGraph_Clean", # Root path of roads data
+            ("mainRoad_{}".format(buffer), {"motorway", "motorway_link", "trunk", "trunk_link", "primary", "primary_link"}),
+            os.path.join(RESULT, "density_roads")
+        )
     # a.calDensity(r"C:\\0_PolyU\\globalPOI_2025\\POI_1.tif", "POI_01")
     # a.calDensity(r"C:\\0_PolyU\\globalPOI_2025\\POI_2.tif", "POI_02")
     # a.calDensity(r"C:\\0_PolyU\\globalPOI_2025\\POI_3.tif", "POI_03")
 
-    a.saveResult()
+        a.saveResult()
     # evcsGeo = a.evcs.loc[(a.evcs[a.unitsname] == "VCT"), ["geometry"]]
     # a.calOneUnitByRaster(r"C:\0_PolyU\globalPOI_2025\POI_2.tif", evcsGeo,"VCT")
 

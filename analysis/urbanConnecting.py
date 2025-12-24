@@ -48,7 +48,7 @@ def urbanConnecting(root: str, maxThread: int = 1) -> None:
                     f.write(country + traceback.format_exc())
             else:
                 processed.append([country, result]) if result else None
-        pd.DataFrame(processed, columns=["iso3", "nationalRoadsDens"]).to_csv(os.path.join(root, "processed.csv"), encoding="utf-8", index=False)
+        pd.DataFrame(processed, columns=["iso3", "nationalRoadsDens_1000"]).to_csv(os.path.join(root, "processed.csv"), encoding="utf-8", index=False)
 
     return
 
@@ -134,7 +134,7 @@ def calOneCountry(gpkg: str, popThres: float = 0) -> bool | float:
                 # select the edge entry with the smallest 'length' value
                 _, bestAttrs = min(edge.items(), key=lambda kv: kv[1].get("length", np.inf))
                 resultPath[k] = bestAttrs.get("geometry")
-                resultPathDens += bestAttrs.get("roadsDens") * bestAttrs.get("length")
+                resultPathDens += bestAttrs.get("roadsDens_1000") * bestAttrs.get("length")
                 k += 1
 
             newEdges[j] = linemerge(resultPath)
@@ -161,7 +161,7 @@ def calOneCountry(gpkg: str, popThres: float = 0) -> bool | float:
     # Save result
     df1 = pd.DataFrame(
         newEdgesDens[:j],
-        columns=["roadsDens", "length", "startCityPopulation", "endCityPopulation"]
+        columns=["roadsDens_1000", "length", "startCityPopulation", "endCityPopulation"]
     )
     df2 = pd.DataFrame(
         newEdgesNode[:j],
