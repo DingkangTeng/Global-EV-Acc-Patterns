@@ -119,6 +119,8 @@ def generate(path: str) -> None:
     for row in files.itertuples():
         file: str = getattr(row, "iso3")
         gpkg = os.path.join(path, file)
+        country = file.split('.')[0]
+        bar.set_description("Merging {}".format(country))
 
         # Check wheter the layer exists
         if "urbanConnecting" not in gpd.list_layers(gpkg)["name"].to_list(): continue
@@ -126,8 +128,7 @@ def generate(path: str) -> None:
         df = gpd.read_file(gpkg, layer="urbanConnecting", encoding="utf-8")
         if df.shape[0] == 0: continue
 
-        country = file.split('.')[0]
-        bar.set_description("Merging {}".format(country))
+        df["iso3"] = country
 
         # Save
         finalResult.append(df)
