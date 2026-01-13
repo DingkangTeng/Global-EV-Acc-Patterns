@@ -19,3 +19,21 @@ def eus(resultPath: str) -> tuple[list[str], list[str]]:
     notEu += ["IRL", "MLT", "CYP", "UKR", "MDA"]
 
     return eu, notEu
+
+# UTM
+def getUtmZone(lat: float, lon: float) -> str:
+    zone = int((lon + 180) // 6) + 1
+    hemisphere = 'north' if lat >= 0 else 'south'
+    return f"EPSG:326{zone:02d}" if hemisphere == 'north' else f"EPSG:327{zone:02d}"
+
+# Decay function
+from numpy import exp
+def decayFunc(distance, d0, func: str) -> float:
+    """Gaussian decay function"""
+    if func == "Gaussian":
+        return (exp(-0.5 * (distance / d0) ** 2)  - exp(-0.5)) / (1 - exp(-0.5))
+    else:
+        raise RuntimeError(" \
+            Unexceptional decay function. Available function: \n \
+            Gaussian decay function; \
+        ")

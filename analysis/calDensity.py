@@ -9,26 +9,11 @@ from rasterio.mask import mask
 from concurrent.futures import as_completed, ThreadPoolExecutor, ProcessPoolExecutor
 from threading import Lock
 
-from __init__ import eus
+from __init__ import eus, getUtmZone, decayFunc
 
 BOUNDART = {
     "level1": "iso3_code"
 }
-
-def decayFunc(distance, d0, func: str) -> float:
-    """Gaussian decay function"""
-    if func == "Gaussian":
-        return (np.exp(-0.5 * (distance / d0) ** 2)  - np.exp(-0.5)) / (1 - np.exp(-0.5))
-    else:
-        raise RuntimeError(" \
-            Unexceptional decay function. Available function: \n \
-            Gaussian decay function; \
-        ")
-
-def get_utm_zone(lat: float, lon: float) -> str:
-    zone = int((lon + 180) // 6) + 1
-    hemisphere = 'north' if lat >= 0 else 'south'
-    return f"EPSG:326{zone:02d}" if hemisphere == 'north' else f"EPSG:327{zone:02d}"
 
 class calDensity:
     __slots__ = [
@@ -54,7 +39,7 @@ class calDensity:
         self.eu = countrylist[countrylist["fileName"] == "EUCommission"]["country_std"].tolist()
         # Special case
         self.eu, notEu = eus(resultPath)
-        self.units = notEu + self.eu + ["EUR_Merge"]
+        self.units = ["EUR_Merge"]
         self.densityPath = os.path.join(resultPath, "density.xlsx")
         if os.path.exists(self.densityPath):
             self.result = pd.read_excel(self.densityPath).set_index(unitsname)
@@ -180,10 +165,10 @@ class calDensity:
             raise RuntimeError("Roads do not have correct crs.")
 
         centroid = roads.union_all().centroid
-        utm_zone = get_utm_zone(centroid.y, centroid.x)
-        roads = roads.to_crs(utm_zone)
+        utmZone = getUtmZone(centroid.y, centroid.x)
+        roads = roads.to_crs(utmZone)
         roadsBuffer = roads.buffer(buffers)
-        evcsGeo = evcsGeo.to_crs(utm_zone)
+        evcsGeo = evcsGeo.to_crs(utmZone)
         evcsIdx = evcsGeo.sindex
 
         results = np.empty([roads.shape[0]], dtype=np.float64)

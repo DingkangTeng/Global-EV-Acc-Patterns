@@ -71,8 +71,8 @@ def calPop(
             # Urban area: USA contains PRI
             if country == "PRI":
                 urban = urbans.loc[urbans[col] == "USA"]
-            elif countries == "EUR_Merge":
-                eu, _ = eus(r"_Data/roadsGraph_Clean")
+            elif country == "EUR_Merge":
+                eu, _ = eus(r"_Data/Global_Country_2025")
                 urban = urbans.loc[urbans[col].isin(eu)]
             else:
                 urban = urbans.loc[urbans[col] == country]
@@ -140,6 +140,7 @@ if __name__ == "__main__":
     countries = pd.read_excel(r"_Data/Global_Country_2025/density.xlsx")
     countries.dropna(subset="mainRoad", inplace=True)
     countries = set(countries["level1"].unique().tolist())
+    countries = {"EUR_Merge"}
 
     # Population raster root path
     pops = r"_Data/population_All"
