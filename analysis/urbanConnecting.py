@@ -10,7 +10,7 @@ from pyproj import Transformer
 from tqdm import tqdm
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
-from __init__ import LACK_POP, getUtmZone, decayFunc
+from __init__ import LACK_POP, getUtmZone, decayFunc, eus
 
 warnings.filterwarnings(
     "ignore", 
@@ -38,7 +38,14 @@ def urbanConnecting(resultPath: str, maxThread: int = 1) -> None:
                 popThres = 500000
 
             gpkg = os.path.join(root, file)
-            future = executor.submit(calOneCountry, gpkg, evcs.loc[evcs["level1"] == iso3].geometry, popThres)
+            future = executor.submit(
+                calOneCountry,
+                gpkg,
+                evcs.loc[
+                    (evcs["level1"] == iso3) if iso3 != "EUR_Merge" else evcs["level1"].isin(eus(resultPath)[0])
+                ].geometry,
+                popThres
+            )
             futureDict[future] = file
             futurses.append(future)
         
