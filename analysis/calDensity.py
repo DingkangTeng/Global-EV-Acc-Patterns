@@ -6,8 +6,8 @@ import numpy as np
 from shapely.geometry import LineString
 from tqdm import tqdm
 from rasterio.mask import mask
+from rasterio.transform import rowcol
 from concurrent.futures import as_completed, ThreadPoolExecutor, ProcessPoolExecutor
-from threading import Lock
 
 from __init__ import eus, getUtmZone, decayFunc
 
@@ -21,14 +21,14 @@ class calDensity:
         "units", "unitsname", "eu",
         "boundaies", "buffer", "decay",
         "result", "densityPath",
-        "maxThread", "lock"
+        "maxThread"
     ]
 
     def __init__(
         self,
         resultPath: str, unitsname: str = "level1",
         buffer: int = 1000, decay: str = "Gaussian",
-        maxThread: int = 1
+        mergeEU: bool = True, maxThread: int = 1
     ) -> None:
 
         self.evcs = gpd.read_file(os.path.join(resultPath, "merge.gpkg"), layer="evcs", encoding="utf-8")[[unitsname, "geometry"]]
@@ -36,10 +36,10 @@ class calDensity:
         self.unitsname = unitsname
 
         countrylist = pd.read_csv(os.path.join(resultPath, "merge_log.csv"), encoding="utf-8")[["fileName", "country_std"]]
-        self.eu = countrylist[countrylist["fileName"] == "EUCommission"]["country_std"].tolist()
+        countrylist = countrylist[countrylist["fileName"] == "EUCommission"]["country_std"].tolist()
         # Special case
-        self.eu, notEu = eus(resultPath)
-        self.units = ["EUR_Merge"]
+        self.eu, nonEu = eus(resultPath)
+        self.units = ["EUR_Merge"] + nonEu if mergeEU else countrylist
         self.densityPath = os.path.join(resultPath, "density.xlsx")
         if os.path.exists(self.densityPath):
             self.result = pd.read_excel(self.densityPath).set_index(unitsname)
@@ -49,7 +49,6 @@ class calDensity:
         self.maxThread = maxThread
         self.buffer = buffer
         self.decay = decay
-        self.lock = Lock()
 
         return
     
@@ -74,7 +73,11 @@ class calDensity:
                     self.evcs = self.evcs.to_crs(src.crs)
         else: col = calType[0]
 
+        gini = "{}_Gini".format(col)
+
         if col not in self.result.columns: self.result[col] = np.nan
+        if not isinstance(calType, tuple) and gini not in self.result.columns:
+            self.result[gini] = np.nan
 
         # Process
         excutor = ProcessPoolExecutor(max_workers=self.maxThread) if isinstance(calType, tuple) else ThreadPoolExecutor(max_workers=self.maxThread)
@@ -96,7 +99,10 @@ class calDensity:
                 raise RuntimeError("{}: {}".format(unit, e))
             else:
                 bar.update(1)
-                with self.lock:
+                if not isinstance(calType, tuple):
+                    self.result.at[unit, col] = Rci[0]
+                    self.result.at[unit, gini] = Rci[1]
+                else:
                     self.result.at[unit, col] = Rci
 
         excutor.shutdown()
@@ -104,17 +110,17 @@ class calDensity:
 
         return
     
-    def calOneUnitByRaster(self, rasterPath: str, evcsGeo: gpd.GeoDataFrame, unit: str) -> np.floating | None:
+    def calOneUnitByRaster(self, rasterPath: str, evcsGeo: gpd.GeoDataFrame, unit: str) -> tuple[np.floating | None, np.floating | None]:
         boundary = self.boundaies.loc[self.boundaies[BOUNDART.get(self.unitsname)] == unit].geometry if unit != "EUR_Merge" \
             else self.boundaies.loc[self.boundaies[BOUNDART.get(self.unitsname)].isin(self.eu)].geometry
         if len(boundary) == 0 or len(evcsGeo) == 0:
-            return None
+            return None, None
         else:
-            boundary = boundary.union_all()
+            boundary = [boundary.union_all()]
         
         with rio.open(rasterPath, options=["NUM_THREADS=ALL_CPUS"]) as src:            
             croppedArray: np.ndarray
-            croppedArray, croppedTransform = mask(
+            croppedArray, _ = mask(
                 src,
                 boundary,
                 crop=True,
@@ -124,7 +130,7 @@ class calDensity:
             
             croppedArray = croppedArray[~np.isnan(croppedArray) & (croppedArray != src.nodata)]
             if np.nansum(croppedArray) == 0:
-                return None
+                return None, None
             DPhigh = np.max(croppedArray)
             DPlow = np.min(croppedArray)
             diff = DPhigh - DPlow
@@ -134,7 +140,21 @@ class calDensity:
             coords = np.column_stack((XCoords, YCoords))
             values = np.array([(val[0] - DPlow) / diff if val[0] != src.nodata else 0 for val in src.sample(coords)])
 
-        return np.nanmean(values)
+            # Get raster results
+            ## Get corresponding row and col index
+            rows, cols = rowcol(src.transform, XCoords, YCoords)
+            idxs = np.ravel_multi_index((rows, cols), src.shape)
+            raster = pd.DataFrame({"values": values, "idxs": idxs}).dropna()
+            raster = raster.groupby(by="idxs").agg(
+                evcs=("idxs", "count"),
+                value=("values", "first")
+            )
+            savePath = os.path.join(os.path.dirname(self.densityPath), "rasterResult", unit)
+            if not os.path.exists(savePath): os.mkdir(savePath)
+            filename = "{}.csv".format(os.path.basename(rasterPath).split('.')[0])
+            raster.to_csv(os.path.join(savePath, filename), encoding="utf-8", index=False)
+
+        return np.nanmean(values), self.gini(raster["value"].to_numpy(), raster["evcs"].to_numpy())
     
     @staticmethod
     def calOneUnitByRoad(
@@ -207,23 +227,64 @@ class calDensity:
             nodes.to_file(os.path.join(savePath, "{}.gpkg".format(unit[1])), layer="nodes", encoding="utf-8")
 
         return results.sum() / roads["length"].sum()
+    
+    @staticmethod
+    def gini(indicator: np.ndarray, evcs:np.ndarray) -> np.floating:
+        # Special case: if only one grid cell has nonzero indicatior
+        # Return 0 if all EVCS entries were filtered out
+        if np.count_nonzero(evcs) == 0: return np.float16(0)
+        elif np.count_nonzero(evcs) == 1: return np.float16(1)
+
+        # Sort values by EVCS in ascending order
+        sortedIndices = np.argsort(evcs)
+        sortedIndicator = indicator[sortedIndices]
+        sortedEVCS = evcs[sortedIndices]
+
+        # Compute cumulative EVCS and cumulative indicatior
+        totalIndicator = sortedIndicator.sum()
+        totalEVCS = sortedEVCS.sum()
+
+        # Normalize cumulative EVCS and indicatior (range 0–1)
+        cumInidcator = np.cumsum(sortedIndicator) / totalIndicator
+        cumEVCS = np.cumsum(sortedEVCS) / totalEVCS
+        ## Add 0
+        lack0 = cumInidcator[0] != 0 or cumEVCS[0] != 0
+        cumInidcator = np.insert(cumInidcator, 0, 0) if lack0 else cumInidcator 
+        cumEVCS = np.insert(cumEVCS, 0, 0) if lack0 else cumEVCS # Add 0
+
+        # Compute the Gini coefficient using the trapezoidal rule (Lorenz curve area)
+        return np.float64(1 - np.trapezoid(cumEVCS, cumInidcator))
+    
+    @staticmethod
+    def Lorentz(df: pd.DataFrame) -> None:
+
+        return
 
 # Debug
 if __name__ == "__main__":
     RESULT = r"_Data/Global_Country_2025" # Path where the merged EVCS data is saved
-    for buffer in [1000, 3000, 5000]:
-        a = calDensity(RESULT, maxThread=64, buffer=buffer)
-        a.calDensity(
-            r"_Data/roadsGraph_Clean", # Root path of roads data
-            ("mainRoad_{}".format(buffer), {"motorway", "motorway_link", "trunk", "trunk_link", "primary", "primary_link"}),
-            os.path.join(RESULT, "density_roads")
-        )
-    # a.calDensity(r"C:\\0_PolyU\\globalPOI_2025\\POI_1.tif", "POI_01")
-    # a.calDensity(r"C:\\0_PolyU\\globalPOI_2025\\POI_2.tif", "POI_02")
-    # a.calDensity(r"C:\\0_PolyU\\globalPOI_2025\\POI_3.tif", "POI_03")
+    POI = r"D:\globalPOI_2025"
+    POP = r"D:\Population_Related\global_pop_2025_CN_1km_R2025A_UA_v1.tif"
+    GDP = r"D:\global_gdp\gdp_2020.tif"
+    # for buffer in [1000, 3000, 5000]:
+    #     a = calDensity(RESULT, maxThread=64, buffer=buffer)
+    #     a.calDensity(
+    #         r"_Data/roadsGraph_Clean", # Root path of roads data
+    #         ("mainRoad_{}".format(buffer), {"motorway", "motorway_link", "trunk", "trunk_link", "primary", "primary_link"}),
+    #         os.path.join(RESULT, "density_roads")
+    #     )
+    #     a.saveResult()
+    
+    a = calDensity(RESULT, maxThread=32)
+    a.calDensity(os.path.join(POI, "POI_1.tif"), "POI_01")
+    a.calDensity(os.path.join(POI, "POI_2.tif"), "POI_02")
+    a.calDensity(os.path.join(POI, "POI_3.tif"), "POI_03")
+    a.calDensity(os.path.join(POI, "POI_ALL.tif"), "POI_ALL")
+    a.calDensity(POP, "POP")
+    a.calDensity(GDP, "GDP")
+    a.saveResult()
 
-        a.saveResult()
-    # evcsGeo = a.evcs.loc[(a.evcs[a.unitsname] == "VCT"), ["geometry"]]
-    # a.calOneUnitByRaster(r"C:\0_PolyU\globalPOI_2025\POI_2.tif", evcsGeo,"VCT")
+    # evcsGeo = a.evcs.loc[(a.evcs[a.unitsname] == "ETH"), ["geometry"]]
+    # print(a.calOneUnitByRaster(os.path.join(POI, "POI_1.tif"), evcsGeo,"ETH"))
 
     
