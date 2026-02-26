@@ -10,10 +10,19 @@ from rasterio.mask import mask
 from rasterio.transform import rowcol
 from concurrent.futures import as_completed, ThreadPoolExecutor, ProcessPoolExecutor
 
-from .__setting import eus, getUtmZone, decayFunc
+from __setting import eus, getUtmZone, decayFunc
 
 BOUNDART = {
     "level1": "iso3_code"
+}
+
+FILE_DICT = {
+    "POI_01.tif": "POI_01",
+    "POI_02.tif": "POI_02",
+    "POI_03.tif": "POI_03",
+    "POI_ALL.tif": "POI_ALL",
+    "global_pop_2025_CN_1km_R2025A_UA_v1.tif": "POP",
+    "gdp_2020.tif": "GDP"
 }
 
 class calDensity:
@@ -65,7 +74,11 @@ class calDensity:
     def calDensity(self, path: str, calType: str | tuple[str, set[str]], additionalSave: str | None = None) -> None:
         futures = []
         futuresDict = {}
-        bar = tqdm(total=len(self.units) * 2, desc="Processing")
+        bar = tqdm(
+            total=len(self.units) * 2,
+            desc="Processing {}".format(calType if not isinstance(calType, tuple) else calType[0]),
+            unit="country"
+        )
         # Projection
         if not isinstance(calType, tuple):
             col = calType
@@ -85,7 +98,7 @@ class calDensity:
         # Process
         excutor = ProcessPoolExecutor(max_workers=self.maxThread) if isinstance(calType, tuple) else ThreadPoolExecutor(max_workers=self.maxThread)
         for unit in self.units:
-            bar.set_description("Processing {}".format(unit))
+            bar.set_description(f"Reading file {unit} for {col}")
             evcsGeo = self.evcs.loc[(self.evcs[self.unitsname] == unit), ["geometry"]] if unit != "EUR_Merge" \
                 else self.evcs.loc[(self.evcs[self.unitsname].isin(self.eu)), ["geometry"]]
             future = excutor.submit(self.calOneUnitByRaster, path, evcsGeo, unit) if not isinstance(calType, tuple) \
@@ -101,6 +114,7 @@ class calDensity:
             except Exception as e:
                 raise RuntimeError("{}: {}".format(unit, e))
             else:
+                bar.set_description(f"Process {unit} for {col} finished")
                 bar.update(1)
                 # if not isinstance(calType, tuple):
                 #     self.result.at[unit, col] = Rci
@@ -174,7 +188,10 @@ class calDensity:
         
         # Get built-up area
         roadsPath = os.path.join(self.roadsPath, "{}.gpkg".format(unit))
-        boundaries = gpd.read_file(roadsPath, layer="cities", encoding="utf-8")[["geometry", "population", "xxx"]].set_index("xxx") # 看数据添加一个名字！
+        if "cities" not in gpd.list_layers(roadsPath)["name"].tolist():
+            return None
+        
+        boundaries = gpd.read_file(roadsPath, layer="cities", encoding="utf-8")[["geometry", "population", "city", "urbanId"]].set_index("city")
         if len(boundaries) == 0 or len(evcsGeo) == 0:
             return None
         
@@ -224,21 +241,23 @@ class calDensity:
                 # filename = "{}.csv".format(os.path.basename(rasterPath).split('.')[0])
                 # raster.to_csv(os.path.join(savePath, filename), encoding="utf-8", index=False)
 
-                countryResults[i, 0] = np.nanmean(values)
+                countryResults[i, 0] = np.nanmean(values) if len(values) > 0 else np.nan
                 countryResults[i, 1] = self.gini(raster["value"].to_numpy(), raster["evcs"].to_numpy())
 
         # Save gini result for each city
         savePath = os.path.join(os.path.dirname(self.densityPath), "giniResult")
         if not os.path.exists(savePath): os.mkdir(savePath)
+        file = os.path.basename(rasterPath)
         pd.DataFrame(
             {
                 "density": countryResults[:, 0],
                 "gini": countryResults[:, 1],
-                "population": boundaries["population"]
+                "population": boundaries["population"],
+                "urbanId": boundaries["urbanId"]
             },
             index=boundaries.index
         ).to_csv(
-            os.path.join(savePath, "{}.csv".format(unit)), encoding="utf-8"
+            os.path.join(savePath, f"{unit}_{FILE_DICT.get(file, file)}.csv"), encoding="utf-8"
         )
 
         return np.nanmean(countryResults[:, 0])
@@ -349,11 +368,11 @@ class calDensity:
 
 # Debug
 if __name__ == "__main__":
-    RESULT = r"_Data/Global_Country_2025" # Path where the merged EVCS data is saved
+    RESULT = r"__Data/Global_Country_2025" # Path where the merged EVCS data is saved
     ROADS_RESULT = os.path.join(RESULT, "density_roads")
-    POI = r"D:\globalPOI_2025"
-    POP = r"D:\Population_Related\global_pop_2025_CN_1km_R2025A_UA_v1.tif"
-    GDP = r"D:\global_gdp\gdp_2020.tif"
+    POI = r"__Data/POI"
+    POP = r"__Data/global_pop_2025_CN_1km_R2025A_UA_v1.tif"
+    GDP = r"__Data/gdp_2020.tif"
     # for buffer in [1000, 3000, 5000]:
     #     a = calDensity(RESULT, maxThread=64, buffer=buffer)
     #     a.calDensity(

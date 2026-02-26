@@ -72,11 +72,17 @@ def calPop(
             if country == "PRI":
                 urban = urbans.loc[urbans[col] == "USA"]
             elif country == "EUR_Merge":
-                eu, _ = eus(savePath)
+                eu, _ = eus(os.path.dirname(savePath))
                 urban = urbans.loc[urbans[col].isin(eu)]
             else:
                 urban = urbans.loc[urbans[col] == country]
-            rasterPath = os.path.join(pops, "{}_allGender_allAge_merge.tif".format(country))
+            rasterPath = os.path.join(
+                pops,
+                f"{country}_allGender_[0, 1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90]_merge.tif"
+            )
+            if not os.path.exists(rasterPath):
+                bar.update()
+                continue
             with rio.open(rasterPath) as src:
                 crs = src.crs.to_epsg()
             
@@ -134,19 +140,18 @@ if __name__ == "__main__":
     # cities = gpd.read_file(r"_Data/boundary/GAUL_2024_L2.gpkg", layer="GAUL_2024_L2", encoding="utf-8")
     # cities = cities[["disp_en", "geometry"]]
     # cities.columns = ["city", "geometry"]
-    urban = gpd.read_file(r"_Data/built_up_area/builtUpArea_fixGeom.gpkg", encoding="utf-8")
+    urban = gpd.read_file(r"__Data/built_up_area/builtUpArea_fixGeom.gpkg", encoding="utf-8")
 
     # Country list
-    countries = pd.read_excel(r"_Data/Global_Country_2025/density.xlsx")
-    countries.dropna(subset="mainRoad", inplace=True)
+    countries = pd.read_excel(r"__Data/Global_Country_2025/density.xlsx")
+    # countries.dropna(subset="mainRoad_1000", inplace=True)
     countries = set(countries["level1"].unique().tolist())
-    countries = {"EUR_Merge"}
 
     # Population raster root path
-    pops = r"_Data/population_All"
+    pops = r"__Data/population_All"
 
     # Root path of saved roads data with density col (save path//density_roads)
-    RESULT = r"_Data/Global_Country_2025/density_roads"
+    RESULT = r"__Data/Global_Country_2025/density_roads"
 
     calPop(countries, (urban, "iso3"), pops, RESULT, 32)
     # # Test
