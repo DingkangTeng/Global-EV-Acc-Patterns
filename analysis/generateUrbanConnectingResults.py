@@ -147,8 +147,8 @@ def generate(path: str) -> None:
     return
 
 if __name__ == "__main__":
-    ROOT = r"_Data/Global_Country_2025/density_roads"
+    ROADS_RESULT = r"_Data/Global_Country_2025/density_roads"
     # cities = gpd.read_file(r"_Data/boundary/GAUL_2024_L2.gpkg", layer="GAUL_2024_L2", encoding="utf-8")
     # cities = cities[["iso3_code", "disp_en", "geometry"]]
 
-    generate(ROOT)
+    generate(ROADS_RESULT)

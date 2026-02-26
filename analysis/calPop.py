@@ -10,7 +10,7 @@ from rasterio.mask import mask
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from tqdm import tqdm
 
-from __init__ import LACK_POP, eus
+from .__setting import LACK_POP, eus
 
 def calPop(
     countries: set[str],
@@ -72,7 +72,7 @@ def calPop(
             if country == "PRI":
                 urban = urbans.loc[urbans[col] == "USA"]
             elif country == "EUR_Merge":
-                eu, _ = eus(r"_Data/Global_Country_2025")
+                eu, _ = eus(savePath)
                 urban = urbans.loc[urbans[col].isin(eu)]
             else:
                 urban = urbans.loc[urbans[col] == country]
@@ -146,8 +146,8 @@ if __name__ == "__main__":
     pops = r"_Data/population_All"
 
     # Root path of saved roads data with density col (save path//density_roads)
-    savePath = r"_Data/Global_Country_2025/density_roads"
+    RESULT = r"_Data/Global_Country_2025/density_roads"
 
-    calPop(countries, (urban, "iso3"), pops, savePath, 32)
+    calPop(countries, (urban, "iso3"), pops, RESULT, 32)
     # # Test
     # oneCountryPop(urban.loc[urban["iso3"] == "USA"], r"_Data/population_All/USA_allGender_allAge_merge.tif")

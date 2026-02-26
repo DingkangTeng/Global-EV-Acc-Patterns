@@ -1,11 +1,11 @@
 import os
 import pandas as pd
 
-from setting import STANDER_NAME, FORMAT
-from function import *
-from setting.finddir import findFiles
+from ..setting import STANDER_NAME, FORMAT
+from . import *
+from ..setting.finddir import findFiles
 
-def main(root: str, result: str, formats: int = 0) -> None:
+def merge(root: str, result: str, formats: int = 0) -> None:
     count = []
     for folder in os.listdir(root):
         filePaths = findFiles(os.path.join(root, folder))
@@ -71,5 +71,5 @@ def main(root: str, result: str, formats: int = 0) -> None:
 if __name__ == "__main__":
     ROOT = r"_Data\\Data Source 2025"
     RESULT = r"_Data\\Global_Country_2025"
-    main(ROOT, RESULT, 0)
+    merge(ROOT, RESULT, 0)
     mergeByMaxRecord(RESULT)

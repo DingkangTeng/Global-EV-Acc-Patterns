@@ -27,8 +27,11 @@ class points2Raster:
 
         return
     
-    def process(self, savPath: str, useCatgory: int = 0) -> None:
-        points = self.points[self.points["fsq_category_ids"] == useCatgory] if useCatgory > 0 else self.points
+    def process(self, savPath: str, useCatgory: int | str = "ALL") -> None:
+        points = (
+            self.points[self.points["fsq_category_ids"] == useCatgory] if isinstance(useCatgory, int) else 
+            self.points[self.points["fsq_category_ids"].isin({1, 2, 3})]
+        )
 
         rows, cols = transform.rowcol(self.transform, points.geometry.x, points.geometry.y)
         validMask = (rows >= 0) & (rows < self.shape[0]) & (cols >= 0) & (cols < self.shape[1])

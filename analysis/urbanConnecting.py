@@ -10,7 +10,7 @@ from pyproj import Transformer
 from tqdm import tqdm
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
-from __init__ import LACK_POP, getUtmZone, decayFunc, eus
+from .__setting import LACK_POP, getUtmZone, decayFunc, eus
 
 warnings.filterwarnings(
     "ignore", 

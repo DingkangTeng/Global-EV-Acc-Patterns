@@ -4,12 +4,13 @@ import geopandas as gpd
 import pandas as pd
 import numpy as np
 from shapely.geometry import LineString
+from shapely.geometry.base import BaseGeometry
 from tqdm import tqdm
 from rasterio.mask import mask
 from rasterio.transform import rowcol
 from concurrent.futures import as_completed, ThreadPoolExecutor, ProcessPoolExecutor
 
-from __init__ import eus, getUtmZone, decayFunc
+from .__setting import eus, getUtmZone, decayFunc
 
 BOUNDART = {
     "level1": "iso3_code"
@@ -17,7 +18,7 @@ BOUNDART = {
 
 class calDensity:
     __slots__ = [
-        "evcs",
+        "evcs", "roadsPath",
         "units", "unitsname", "eu",
         "boundaies", "buffer", "decay",
         "result", "densityPath",
@@ -26,7 +27,8 @@ class calDensity:
 
     def __init__(
         self,
-        resultPath: str, unitsname: str = "level1",
+        resultPath: str, roadsPath: str = "",
+        unitsname: str = "level1",
         buffer: int = 1000, decay: str = "Gaussian",
         mergeEU: bool = True, maxThread: int = 1
     ) -> None:
@@ -34,6 +36,7 @@ class calDensity:
         self.evcs = gpd.read_file(os.path.join(resultPath, "merge.gpkg"), layer="evcs", encoding="utf-8")[[unitsname, "geometry"]]
         self.boundaies = gpd.read_file(os.path.join(resultPath, "merge.gpkg"), layer=unitsname, encoding="utf-8") # from GAUL
         self.unitsname = unitsname
+        self.roadsPath = roadsPath
 
         countrylist = pd.read_csv(os.path.join(resultPath, "merge_log.csv"), encoding="utf-8")[["fileName", "country_std"]]
         countrylist = countrylist[countrylist["fileName"] == "EUCommission"]["country_std"].tolist()
@@ -73,11 +76,11 @@ class calDensity:
                     self.evcs = self.evcs.to_crs(src.crs)
         else: col = calType[0]
 
-        gini = "{}_Gini".format(col)
+        # gini = "{}_Gini".format(col)
 
         if col not in self.result.columns: self.result[col] = np.nan
-        if not isinstance(calType, tuple) and gini not in self.result.columns:
-            self.result[gini] = np.nan
+        # if not isinstance(calType, tuple) and gini not in self.result.columns:
+        #     self.result[gini] = np.nan
 
         # Process
         excutor = ProcessPoolExecutor(max_workers=self.maxThread) if isinstance(calType, tuple) else ThreadPoolExecutor(max_workers=self.maxThread)
@@ -99,67 +102,151 @@ class calDensity:
                 raise RuntimeError("{}: {}".format(unit, e))
             else:
                 bar.update(1)
-                if not isinstance(calType, tuple):
-                    self.result.at[unit, col] = Rci[0]
-                    self.result.at[unit, gini] = Rci[1]
-                else:
-                    self.result.at[unit, col] = Rci
+                # if not isinstance(calType, tuple):
+                #     self.result.at[unit, col] = Rci
+                # else:
+                #     self.result.at[unit, col] = Rci
+                self.result.at[unit, col] = Rci
 
         excutor.shutdown()
         bar.close()
 
         return
     
-    def calOneUnitByRaster(self, rasterPath: str, evcsGeo: gpd.GeoDataFrame, unit: str) -> tuple[np.floating | None, np.floating | None]:
-        boundary = self.boundaies.loc[self.boundaies[BOUNDART.get(self.unitsname)] == unit].geometry if unit != "EUR_Merge" \
-            else self.boundaies.loc[self.boundaies[BOUNDART.get(self.unitsname)].isin(self.eu)].geometry
-        if len(boundary) == 0 or len(evcsGeo) == 0:
-            return None, None
-        else:
-            boundary = [boundary.union_all()]
+    # def calOneUnitByRaster(
+    #     self,
+    #     rasterPath: str, evcsGeo: gpd.GeoDataFrame | pd.Series,
+    #     unit: str
+    # ) -> tuple[np.floating | None, np.floating | None]:
         
-        with rio.open(rasterPath, options=["NUM_THREADS=ALL_CPUS"]) as src:            
-            croppedArray: np.ndarray
-            croppedArray, _ = mask(
-                src,
-                boundary,
-                crop=True,
-                all_touched=True,
-                nodata=src.nodata
-            )
+    #     boundary = self.boundaies.loc[self.boundaies[BOUNDART.get(self.unitsname)] == unit].geometry if unit != "EUR_Merge" \
+    #         else self.boundaies.loc[self.boundaies[BOUNDART.get(self.unitsname)].isin(self.eu)].geometry
+    #     if len(boundary) == 0 or len(evcsGeo) == 0:
+    #         return None, None
+    #     else:
+    #         boundary = [boundary.union_all()]
+        
+    #     # Calcuate the density by built-up area
+        
+    #     with rio.open(rasterPath, options=["NUM_THREADS=ALL_CPUS"]) as src:            
+    #         croppedArray: np.ndarray
+    #         croppedArray, _ = mask(
+    #             src,
+    #             boundary,
+    #             crop=True,
+    #             all_touched=True,
+    #             nodata=src.nodata
+    #         )
             
-            croppedArray = croppedArray[~np.isnan(croppedArray) & (croppedArray != src.nodata)]
-            if np.nansum(croppedArray) == 0:
-                return None, None
-            DPhigh = np.max(croppedArray)
-            DPlow = np.min(croppedArray)
-            diff = DPhigh - DPlow
+    #         croppedArray = croppedArray[~np.isnan(croppedArray) & (croppedArray != src.nodata)]
+    #         if np.nansum(croppedArray) == 0:
+    #             return None, None
+    #         DPhigh = np.max(croppedArray)
+    #         DPlow = np.min(croppedArray)
+    #         diff = DPhigh - DPlow
             
-            XCoords = evcsGeo.geometry.x.to_numpy().astype(np.float32)
-            YCoords = evcsGeo.geometry.y.to_numpy().astype(np.float32)
-            coords = np.column_stack((XCoords, YCoords))
-            values = np.array([(val[0] - DPlow) / diff if val[0] != src.nodata else 0 for val in src.sample(coords)])
+    #         XCoords = evcsGeo.geometry.x.to_numpy().astype(np.float32)
+    #         YCoords = evcsGeo.geometry.y.to_numpy().astype(np.float32)
+    #         coords = np.column_stack((XCoords, YCoords))
+    #         values = np.array([(val[0] - DPlow) / diff if val[0] != src.nodata else 0 for val in src.sample(coords)])
 
-            # Get raster results
-            ## Get corresponding row and col index
-            rows, cols = rowcol(src.transform, XCoords, YCoords)
-            idxs = np.ravel_multi_index((rows, cols), src.shape)
-            raster = pd.DataFrame({"values": values, "idxs": idxs}).dropna()
-            raster = raster.groupby(by="idxs").agg(
-                evcs=("idxs", "count"),
-                value=("values", "first")
-            )
-            savePath = os.path.join(os.path.dirname(self.densityPath), "rasterResult", unit)
-            if not os.path.exists(savePath): os.mkdir(savePath)
-            filename = "{}.csv".format(os.path.basename(rasterPath).split('.')[0])
-            raster.to_csv(os.path.join(savePath, filename), encoding="utf-8", index=False)
+    #         # Get raster results
+    #         ## Get corresponding row and col index
+    #         rows, cols = rowcol(src.transform, XCoords, YCoords)
+    #         idxs = np.ravel_multi_index((rows, cols), src.shape)
+    #         raster = pd.DataFrame({"values": values, "idxs": idxs}).dropna()
+    #         raster = raster.groupby(by="idxs").agg(
+    #             evcs=("idxs", "count"),
+    #             value=("values", "first")
+    #         )
+    #         savePath = os.path.join(os.path.dirname(self.densityPath), "rasterResult", unit)
+    #         if not os.path.exists(savePath): os.mkdir(savePath)
+    #         filename = "{}.csv".format(os.path.basename(rasterPath).split('.')[0])
+    #         raster.to_csv(os.path.join(savePath, filename), encoding="utf-8", index=False)
 
-        return np.nanmean(values), self.gini(raster["value"].to_numpy(), raster["evcs"].to_numpy())
+    #     return np.nanmean(values), self.gini(raster["value"].to_numpy(), raster["evcs"].to_numpy())
+    def calOneUnitByRaster(
+        self,
+        rasterPath: str,
+        evcsGeo: gpd.GeoDataFrame | pd.Series,
+        unit: str
+    ) -> np.floating | None:
+        
+        # Get built-up area
+        roadsPath = os.path.join(self.roadsPath, "{}.gpkg".format(unit))
+        boundaries = gpd.read_file(roadsPath, layer="cities", encoding="utf-8")[["geometry", "population", "xxx"]].set_index("xxx") # 看数据添加一个名字！
+        if len(boundaries) == 0 or len(evcsGeo) == 0:
+            return None
+        
+        # Calcuate the density by built-up area
+        countryResults = np.empty([boundaries.shape[0], 2], dtype=np.float64)
+        for i, row in enumerate(boundaries.itertuples()):
+            boundary: BaseGeometry = getattr(row, "geometry")
+
+            # Get evcs points
+            possibleMAtch = np.array(evcsGeo.sindex.intersection(boundary.bounds), dtype=np.int64)
+            evcsGeoSub = evcsGeo.iloc[possibleMAtch]
+            evcsGeoSub = evcsGeoSub[evcsGeoSub.intersects(boundary)]
+
+            with rio.open(rasterPath, options=["NUM_THREADS=ALL_CPUS"]) as src:            
+                croppedArray: np.ndarray
+                croppedArray, _ = mask(
+                    src,
+                    [boundary],
+                    crop=True,
+                    all_touched=True,
+                    nodata=src.nodata
+                )
+                
+                croppedArray = croppedArray[~np.isnan(croppedArray) & (croppedArray != src.nodata)]
+                if np.nansum(croppedArray) == 0:
+                    return None
+                DPhigh = np.max(croppedArray)
+                DPlow = np.min(croppedArray)
+                diff = DPhigh - DPlow
+                
+                XCoords = evcsGeoSub.geometry.x.to_numpy().astype(np.float32)
+                YCoords = evcsGeoSub.geometry.y.to_numpy().astype(np.float32)
+                coords = np.column_stack((XCoords, YCoords))
+                values = np.array([(val[0] - DPlow) / diff if val[0] != src.nodata else 0 for val in src.sample(coords)])
+
+                # Get raster results
+                ## Get corresponding row and col index
+                rows, cols = rowcol(src.transform, XCoords, YCoords)
+                idxs = np.ravel_multi_index((rows, cols), src.shape)
+                raster = pd.DataFrame({"values": values, "idxs": idxs}).dropna()
+                raster = raster.groupby(by="idxs").agg(
+                    evcs=("idxs", "count"),
+                    value=("values", "first")
+                )
+                # savePath = os.path.join(savePathRoot, "rasterResult", unit)
+                # if not os.path.exists(savePath): os.mkdir(savePath)
+                # filename = "{}.csv".format(os.path.basename(rasterPath).split('.')[0])
+                # raster.to_csv(os.path.join(savePath, filename), encoding="utf-8", index=False)
+
+                countryResults[i, 0] = np.nanmean(values)
+                countryResults[i, 1] = self.gini(raster["value"].to_numpy(), raster["evcs"].to_numpy())
+
+        # Save gini result for each city
+        savePath = os.path.join(os.path.dirname(self.densityPath), "giniResult")
+        if not os.path.exists(savePath): os.mkdir(savePath)
+        pd.DataFrame(
+            {
+                "density": countryResults[:, 0],
+                "gini": countryResults[:, 1],
+                "population": boundaries["population"]
+            },
+            index=boundaries.index
+        ).to_csv(
+            os.path.join(savePath, "{}.csv".format(unit)), encoding="utf-8"
+        )
+
+        return np.nanmean(countryResults[:, 0])
     
     @staticmethod
     def calOneUnitByRoad(
         roadsPath: str,
-        evcsGeo: gpd.GeoDataFrame,
+        evcsGeo: gpd.GeoDataFrame | pd.Series,
         unit: tuple[str, str],
         buffers: int, decay: str,
         roadsLevel: set[str],
@@ -263,6 +350,7 @@ class calDensity:
 # Debug
 if __name__ == "__main__":
     RESULT = r"_Data/Global_Country_2025" # Path where the merged EVCS data is saved
+    ROADS_RESULT = os.path.join(RESULT, "density_roads")
     POI = r"D:\globalPOI_2025"
     POP = r"D:\Population_Related\global_pop_2025_CN_1km_R2025A_UA_v1.tif"
     GDP = r"D:\global_gdp\gdp_2020.tif"
@@ -271,11 +359,11 @@ if __name__ == "__main__":
     #     a.calDensity(
     #         r"_Data/roadsGraph_Clean", # Root path of roads data
     #         ("mainRoad_{}".format(buffer), {"motorway", "motorway_link", "trunk", "trunk_link", "primary", "primary_link"}),
-    #         os.path.join(RESULT, "density_roads")
+    #         ROADS_RESULT
     #     )
     #     a.saveResult()
     
-    a = calDensity(RESULT, maxThread=32)
+    a = calDensity(RESULT, roadsPath=ROADS_RESULT, maxThread=32)
     a.calDensity(os.path.join(POI, "POI_1.tif"), "POI_01")
     a.calDensity(os.path.join(POI, "POI_2.tif"), "POI_02")
     a.calDensity(os.path.join(POI, "POI_3.tif"), "POI_03")
