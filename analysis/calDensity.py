@@ -49,9 +49,7 @@ class calDensity:
 
         # Countries
         self.eu, nonEu = eus(resultPath)
-        self.units = ["EUR_Merge"] + nonEu if mergeEU else pd.read_csv(
-            os.path.join(resultPath, "merge_log.csv"), encoding="utf-8", usecols=["country_std"]
-        )["country_std"].unique().tolist()
+        self.units = ["EUR_Merge"] + nonEu if mergeEU else self.eu + nonEu
         self.densityPath = os.path.join(resultPath, "density.xlsx")
         if os.path.exists(self.densityPath):
             self.result = pd.read_excel(self.densityPath).set_index(unitsname)
