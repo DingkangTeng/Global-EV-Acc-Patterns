@@ -10,7 +10,7 @@ from rasterio.mask import mask
 from rasterio.transform import rowcol
 from concurrent.futures import as_completed, ThreadPoolExecutor, ProcessPoolExecutor
 
-from __setting import eus, getUtmZone, decayFunc
+from .__setting import eus, getUtmZone, decayFunc
 
 BOUNDART = {
     "level1": "iso3_code"
@@ -87,11 +87,13 @@ class calDensity:
                     self.evcs = self.evcs.to_crs(src.crs)
         else: col = calType[0]
 
-        # gini = "{}_Gini".format(col)
-
+        # Initialize result column
         if col not in self.result.columns: self.result[col] = np.nan
-        # if not isinstance(calType, tuple) and gini not in self.result.columns:
-        #     self.result[gini] = np.nan
+
+        # Initialize gini column
+        gini = "{}_Gini".format(col)
+        if not isinstance(calType, tuple) and gini not in self.result.columns:
+            self.result[gini] = np.nan
 
         # Process
         excutor = ProcessPoolExecutor(max_workers=self.maxThread) if isinstance(calType, tuple) else ThreadPoolExecutor(max_workers=self.maxThread)
@@ -114,11 +116,13 @@ class calDensity:
             else:
                 bar.set_description(f"Process {unit} for {col} finished")
                 bar.update(1)
-                # if not isinstance(calType, tuple):
-                #     self.result.at[unit, col] = Rci
-                # else:
-                #     self.result.at[unit, col] = Rci
-                self.result.at[unit, col] = Rci
+                # Calculate units by roads
+                if isinstance(calType, tuple):
+                    self.result.at[unit, col] = Rci
+                # Calcualte units by rasters
+                else:
+                    self.result.at[unit, col] = Rci[0]
+                    self.result.at[unit, gini] = Rci[1]
 
         excutor.shutdown()
         bar.close()
@@ -130,7 +134,7 @@ class calDensity:
         rasterPath: str,
         evcsGeo: gpd.GeoDataFrame | pd.Series,
         unit: str
-    ) -> np.floating | None:
+    ) -> tuple[np.floating, np.floating] | None:
         
         # Get built-up area
         roadsPath = os.path.join(self.roadsPath, "{}.gpkg".format(unit))
@@ -206,7 +210,7 @@ class calDensity:
             os.path.join(savePath, f"{unit}_{FILE_DICT.get(file, file)}.csv"), encoding="utf-8"
         )
 
-        return np.nanmean(countryResults[:, 0])
+        return np.nanmean(countryResults[:, 0]), np.nanmedian(countryResults[:, 1])
     
     @staticmethod
     def calOneUnitByRoad(
