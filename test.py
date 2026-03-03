@@ -18,17 +18,18 @@ for row in result.itertuples():
     idx = getattr(row, "Index")
     iso3 = getattr(row, "level1")
     for col in cols:
-        if getattr(row, col) is None:
+        if np.isnan(getattr(row, col)):
             bar.update()
             continue
         
-        fileName = f"{col}.tif" if col in special else col
+        fileName = f"POI_{int(col.split('_')[1])}.tif" if col in special else col
         gini = pd.read_csv(
-            os.path.join(r"__Data/Global_Country_2025/giniResult", f"{iso3}_{fileName}.csv"),
-            usecols=["gini"]
-        )["gini"].to_numpy()
+            os.path.join(r"__Data/Global_Country_2025/giniResult", f"{iso3}_{fileName}.csv")
+        ).dropna()["gini"].to_numpy()
         result.at[idx, f"{col}_gini"] = np.nanmedian(gini)
 
         bar.update()
+
+result.to_excel(r"__Data/Global_Country_2025/density.xlsx", index=False)
 
 bar.close()

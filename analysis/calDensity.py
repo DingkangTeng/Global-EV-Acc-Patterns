@@ -198,7 +198,7 @@ class calDensity:
         savePath = os.path.join(os.path.dirname(self.densityPath), "giniResult")
         if not os.path.exists(savePath): os.mkdir(savePath)
         file = os.path.basename(rasterPath)
-        pd.DataFrame(
+        df = pd.DataFrame(
             {
                 "density": countryResults[:, 0],
                 "gini": countryResults[:, 1],
@@ -206,11 +206,13 @@ class calDensity:
                 "urbanId": boundaries["urbanId"]
             },
             index=boundaries.index
-        ).to_csv(
+        )
+        # Save results
+        df.to_csv(
             os.path.join(savePath, f"{unit}_{FILE_DICT.get(file, file)}.csv"), encoding="utf-8"
         )
 
-        return np.nanmean(countryResults[:, 0]), np.nanmedian(countryResults[:, 1])
+        return np.nanmean(countryResults[:, 0]), np.nanmedian(df.dropna()["gini"].to_numpy())
     
     @staticmethod
     def calOneUnitByRoad(
@@ -311,11 +313,6 @@ class calDensity:
 
         # Compute the Gini coefficient using the trapezoidal rule (Lorenz curve area)
         return np.float64(1 - np.trapezoid(cumEVCS, cumInidcator))
-    
-    @staticmethod
-    def Lorentz(df: pd.DataFrame) -> None:
-
-        return
 
 # Debug
 if __name__ == "__main__":
