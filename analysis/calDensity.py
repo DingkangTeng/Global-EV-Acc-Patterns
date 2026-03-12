@@ -28,7 +28,7 @@ FILE_DICT = {
 class calDensity:
     __slots__ = [
         "evcs", "roadsPath",
-        "units", "unitsname", "eu", "countryList"
+        "units", "unitsname", "eu", "countryList",
         "boundaies", "buffer", "decay",
         "result", "densityPath",
         "maxThread"
@@ -129,7 +129,7 @@ class calDensity:
                 else:
                     self.result.at[unit, col] = Rci[0]
                     self.result.at[unit, gini] = Rci[1]
-                    if Rci[2]: self.countryList
+                    if Rci[2]: self.countryList.add(unit)
 
         excutor.shutdown()
         bar.close()
@@ -141,17 +141,17 @@ class calDensity:
         rasterPath: str,
         evcsGeo: gpd.GeoDataFrame | pd.Series,
         unit: str
-    ) -> tuple[np.floating, np.floating, bool] | None:
+    ) -> tuple[np.floating | None, np.floating | None, bool]:
         EVCSOver10 = False
         
         # Get built-up area
         roadsPath = os.path.join(self.roadsPath, "{}.gpkg".format(unit))
         if "cities" not in gpd.list_layers(roadsPath)["name"].tolist():
-            return None
+            return None, None, EVCSOver10
         
         boundaries = gpd.read_file(roadsPath, layer="cities", encoding="utf-8")[["geometry", "population", "city", "urbanId"]].set_index("city")
         if len(boundaries) == 0 or len(evcsGeo) == 0:
-            return None
+            return None, None, EVCSOver10
         
         # Calcuate the density by built-up area
         countryResults = np.empty([boundaries.shape[0], 2], dtype=np.float64)
