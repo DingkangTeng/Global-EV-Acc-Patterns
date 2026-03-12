@@ -28,7 +28,7 @@ FILE_DICT = {
 class calDensity:
     __slots__ = [
         "evcs", "roadsPath",
-        "units", "unitsname", "eu",
+        "units", "unitsname", "eu", "countryList"
         "boundaies", "buffer", "decay",
         "result", "densityPath",
         "maxThread"
@@ -46,6 +46,7 @@ class calDensity:
         self.boundaies = gpd.read_file(os.path.join(resultPath, "merge.gpkg"), layer=unitsname, encoding="utf-8") # from GAUL
         self.unitsname = unitsname
         self.roadsPath = roadsPath
+        self.countryList = set()
 
         # Countries
         self.eu, nonEu = eus(resultPath)
@@ -66,6 +67,11 @@ class calDensity:
         self.result.reset_index(inplace=True)
         self.result.rename(columns={"index": self.unitsname}, inplace=True)
         self.result.to_excel(self.densityPath, index=False)
+        pd.DataFrame({"eligableCountry": list(self.countryList)}).to_csv(
+            os.path.join(os.path.dirname(self.densityPath), "eligableCountries.csv"),
+            encoding="utf-8",
+            index=False
+        )
 
         return
 
@@ -123,6 +129,7 @@ class calDensity:
                 else:
                     self.result.at[unit, col] = Rci[0]
                     self.result.at[unit, gini] = Rci[1]
+                    if Rci[2]: self.countryList
 
         excutor.shutdown()
         bar.close()
@@ -134,7 +141,8 @@ class calDensity:
         rasterPath: str,
         evcsGeo: gpd.GeoDataFrame | pd.Series,
         unit: str
-    ) -> tuple[np.floating, np.floating] | None:
+    ) -> tuple[np.floating, np.floating, bool] | None:
+        EVCSOver10 = False
         
         # Get built-up area
         roadsPath = os.path.join(self.roadsPath, "{}.gpkg".format(unit))
@@ -155,6 +163,9 @@ class calDensity:
                 possibleMAtch = np.array(evcsGeo.sindex.intersection(boundary.bounds), dtype=np.int64)
                 evcsGeoSub = evcsGeo.iloc[possibleMAtch]
                 evcsGeoSub = evcsGeoSub[evcsGeoSub.intersects(boundary)]
+
+                # Check validation
+                if evcsGeoSub.shape[0] > 10: EVCSOver10 = True
                         
                 croppedArray: np.ndarray
                 croppedArray, _ = mask(
@@ -212,7 +223,7 @@ class calDensity:
             os.path.join(savePath, f"{unit}_{FILE_DICT.get(file, file)}.csv"), encoding="utf-8"
         )
 
-        return np.nanmean(countryResults[:, 0]), np.nanmedian(df.dropna()["gini"].to_numpy())
+        return np.nanmean(countryResults[:, 0]), np.nanmedian(df.dropna()["gini"].to_numpy()), EVCSOver10
     
     @staticmethod
     def calOneUnitByRoad(
