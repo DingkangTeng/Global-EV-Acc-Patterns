@@ -298,11 +298,10 @@ class calDensity:
         return results.sum() / roads["length"].sum()
     
     @staticmethod
-    def gini(indicator: np.ndarray, evcs:np.ndarray) -> np.floating:
+    def gini(indicator: np.ndarray, evcs:np.ndarray) -> np.floating | float:
         # Special case: if only one grid cell has nonzero indicatior
-        # Return 0 if all EVCS entries were filtered out
-        if np.count_nonzero(evcs) == 0: return np.float16(0)
-        elif np.count_nonzero(evcs) == 1: return np.float16(1)
+        # Return nan if total count less than 10, because no significant meaning for gini
+        if np.count_nonzero(evcs) < 10: return np.nan
 
         # Sort values by EVCS in ascending order
         sortedIndices = np.argsort(evcs)
