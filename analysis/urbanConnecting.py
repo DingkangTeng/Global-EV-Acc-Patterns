@@ -40,7 +40,7 @@ def urbanConnecting(resultPath: str, maxThread: int = 1) -> None:
             gpkg = os.path.join(root, file)
             future = executor.submit(
                 calOneCountry,
-                gpkg,
+                gpkg, iso3,
                 evcs.loc[
                     (evcs["level1"] == iso3) if iso3 != "EUR_Merge" else evcs["level1"].isin(eus(resultPath)[0])
                 ].geometry,
@@ -188,18 +188,19 @@ def urbanConnecting(resultPath: str, maxThread: int = 1) -> None:
 
 #     return finalDens / finalLength
 
-def calOneCountry(gpkg: str, evcs: gpd.GeoSeries, popThres: float = 0) -> bool | float:
+def calOneCountry(gpkg: str, iso3: str, evcs: gpd.GeoSeries, popThres: float = 0) -> bool | float:
     # Skip null country:
     if "cities" not in gpd.list_layers(gpkg)["name"].to_list(): return False
 
     urbans = gpd.read_file(gpkg, layer="cities", encoding="utf-8")[["population", "city", "urbanId", "geometry"]]
     urbans = urbans[urbans["population"] >= popThres]
 
-    if urbans.shape[0] > 50:
+    maxThres = 60 if iso3 == "EUR_Merge" else 50
+    if urbans.shape[0] > maxThres:
         # get the 51st smallest population if available, otherwise fall back to the smallest (or 0 if no rows)
         popsSorted = urbans["population"].sort_values(ascending=False).reset_index(drop=True)
 
-        popThres = popsSorted.iloc[50]
+        popThres = popsSorted.iloc[maxThres]
         del popsSorted
 
         urbans = urbans[urbans["population"] >= popThres]

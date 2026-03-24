@@ -1,0 +1,32 @@
+Algorithm: Inter-city highway charging accessibility
+Input: 
+    gpkg – Geodatabase containing layers "edges" (road edges) and "EVCS"
+    d_0 - catchment radius (meters)
+Output: 
+    List of accessibility densities
+
+// Step 1: Reproject to appropriate UTM zone
+    Project all geometries (nodes, edges, evcs) to a consistent UTM zone
+
+// Step 2: Compute accessibility density for each road segment
+    Results := empty list
+    For each r in edges Do
+        roadBuffer := buffer(r, d_0)
+        l_j := r.length
+
+        // Query EVCS within buffer bounds using spatial index
+        evcsInBuffer := {e in evcs | intersects(e, roadBuffer)}
+        If evcsInBuffer is empty OR l_j == 0 Then
+            Acc_j := NaN
+        Else
+            d_ij := distance(r, pt)
+            I_ij := 1 IF d_ij <= d_0 ELSE 0
+            W_ij := H(d_ij, d_0) // distance decay function, e.g., Gaussian (Eq. 3)
+            Acc_j := I_ij×W_ij/l_j
+        End If
+
+        Append Acc_j to Results
+    End For
+
+    If Results is empty Then return False
+    Else Return Results

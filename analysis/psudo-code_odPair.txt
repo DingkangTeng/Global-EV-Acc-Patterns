@@ -1,0 +1,56 @@
+Algorithm: Inter-city highway charging accessibility
+Input: 
+    gpkg – Geodatabase containing layers "cities" (city boundary), "nodes" (road nodes), "edges" (road edges), and "EVCS"
+    popThres – population threshold
+    d_0 - catchment radius (meters)
+Output: 
+    List of accessibility densities for all OD-Pair
+
+// Step 1: Load and filter city data
+    urbans := {c in cities | c.population >= popThres}
+    points := array of (x, y) coordinates from centroids for each urban geometry
+
+// Step 2: Match each city to the nearest road network node
+    Project all geometries (nodes, edges, EVCS) to a consistent UTM zone
+    Build spatial index on nodes (e.g., KD‑tree)
+    For each point in points Do
+        nearestNode := query index for closest node
+        Record nearestNode as the city's representative node
+    End For
+    urbanNodes := set of all representative node IDs
+
+// Step 3: Construct directed road graph
+    Construct directed graph G with nodes and edges (edge weight is road length)
+
+// Step 4: Compute shortest paths and road density for every city pair
+    Results := empty list
+    For each start in urbanNodes Do
+        For each end in urbanNodes \ {start} Do
+            (length, path) := Dijkstra(G, start, end) with weight = length
+            If no path exists Then skip this pair
+            l_j := sum(length)
+
+            // Collect edge geometries along the path
+                lines := merge all lines in path
+
+            // Calculate road density using EVCS within a cathcment area
+                linesBuffer := buffer(lines, d_0)
+                EVCSInBuffer := {e in EVCS | intersects(e, linesBuffer)}
+                If EVCSInBuffer is empty OR l_j == 0 Then
+                    Acc_j := 0.0
+                Else
+                    Acc_j := 0.0
+                    For each pt in EVCSInBuffer Do
+                        d_ij := distance(lines, pt)
+                        I_ij := 1 IF d_ij <= d_0 ELSE 0
+                        W_ij := H(d_ij, d_0) // distance decay function, e.g., Gaussian (Eq. 3)
+                        Acc_j += I_ij×W_ij/l_j
+                    End For
+                End If
+
+            Append Acc_j to Results
+        End For
+    End For
+
+    If Results is empty Then return False
+    Else Return Results

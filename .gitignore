@@ -1,5 +1,7 @@
 __Data
 __convert
+__ArcGIS
+__paper
 *.code-workspace
 __pycache__
 2025年全球充电站位置数据记录20250901.xlsx

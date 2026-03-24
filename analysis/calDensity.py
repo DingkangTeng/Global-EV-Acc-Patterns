@@ -154,7 +154,9 @@ class calDensity:
             return None, None, EVCSOver10
         
         # Calcuate the density by built-up area
-        countryResults = np.empty([boundaries.shape[0], 2], dtype=np.float64)
+        n = boundaries.shape[0]
+        countryResults = np.empty([n, 2], dtype=np.float64)
+        EVCSNum = np.empty(n, dtype=np.uint16)
         with rio.open(rasterPath, options=["NUM_THREADS=ALL_CPUS"]) as src:
             for i, row in enumerate(boundaries.itertuples()):
                 boundary: BaseGeometry = getattr(row, "geometry")
@@ -165,7 +167,8 @@ class calDensity:
                 evcsGeoSub = evcsGeoSub[evcsGeoSub.intersects(boundary)]
 
                 # Check validation
-                if evcsGeoSub.shape[0] > 10: EVCSOver10 = True
+                EVCSNum[i] = evcsGeoSub.shape[0]
+                if EVCSNum[i] > 10: EVCSOver10 = True
                         
                 croppedArray: np.ndarray
                 croppedArray, _ = mask(
