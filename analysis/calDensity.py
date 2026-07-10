@@ -301,19 +301,30 @@ class calDensity:
         return results.sum() / roads["length"].sum()
     
     @staticmethod
-    def gini(indicator: np.ndarray, evcs:np.ndarray) -> np.floating | float:
+    def gini(indicator: np.ndarray, evcs:np.ndarray) -> np.floating:
         # Special case: if only one grid cell has nonzero indicatior
         # Return nan if total count less than 10, because no significant meaning for gini
         if np.count_nonzero(evcs) < 10: return np.nan
 
-        # Sort values by EVCS in ascending order
-        sortedIndices = np.argsort(evcs)
+        # Sort values by EVCS
+        conditions = [
+            indicator == 0,
+            (indicator != 0) & (evcs == 0),
+            (indicator != 0) & (evcs != 0)
+        ]
+        choices = [
+            0,
+            np.inf,
+            indicator / evcs
+        ]
+        preCap = np.select(conditions, choices, default=np.nan)
+        sortedIndices = np.argsort(-preCap)
         sortedIndicator = indicator[sortedIndices]
         sortedEVCS = evcs[sortedIndices]
 
         # Compute cumulative EVCS and cumulative indicatior
         totalIndicator = sortedIndicator.sum()
-        if totalIndicator == 0: return np.float16(0)
+        if totalIndicator == 0: return np.float64(0)
         totalEVCS = sortedEVCS.sum()
 
         # Normalize cumulative EVCS and indicatior (range 0–1)
@@ -325,15 +336,20 @@ class calDensity:
         cumEVCS = np.insert(cumEVCS, 0, 0) if lack0 else cumEVCS # Add 0
 
         # Compute the Gini coefficient using the trapezoidal rule (Lorenz curve area)
-        return np.float64(1 - np.trapezoid(cumEVCS, cumInidcator))
+        return np.float64(1 - 2 * np.trapezoid(cumEVCS, cumInidcator))
 
 # Debug
 if __name__ == "__main__":
-    RESULT = r"__Data/Global_Country_2025" # Path where the merged EVCS data is saved
+    # RESULT = r"__Data/Global_Country_2025" # Path where the merged EVCS data is saved
+    # ROADS_RESULT = os.path.join(RESULT, "density_roads")
+    # POI = r"__Data/POI"
+    # POP = r"__Data/global_pop_2025_CN_1km_R2025A_UA_v1.tif"
+    # GDP = r"__Data/gdp_2020.tif"
+    RESULT = r"C:\0_PolyU\data-global-ev-2025\__Data\Global_Country_2025" # Path where the merged EVCS data is saved
     ROADS_RESULT = os.path.join(RESULT, "density_roads")
-    POI = r"__Data/POI"
-    POP = r"__Data/global_pop_2025_CN_1km_R2025A_UA_v1.tif"
-    GDP = r"__Data/gdp_2020.tif"
+    POI = r"D:\globalPOI_2025"
+    POP = r"D:\Population_Related\global_pop_2025_CN_1km_R2025A_UA_v1.tif"
+    GDP = r"D:\global_gdp\gdp_2020.tif"
     # for buffer in [1000, 3000, 5000]:
     #     a = calDensity(RESULT, maxThread=64, buffer=buffer)
     #     a.calDensity(
