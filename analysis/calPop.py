@@ -10,7 +10,10 @@ from rasterio.mask import mask
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from tqdm import tqdm
 
-from .__setting import LACK_POP, eus
+try:
+    from .__setting import LACK_POP, eus
+except:
+    from __setting import LACK_POP, eus
 
 def calPop(
     countries: set[str],
@@ -140,18 +143,35 @@ if __name__ == "__main__":
     # cities = gpd.read_file(r"_Data/boundary/GAUL_2024_L2.gpkg", layer="GAUL_2024_L2", encoding="utf-8")
     # cities = cities[["disp_en", "geometry"]]
     # cities.columns = ["city", "geometry"]
-    urban = gpd.read_file(r"__Data/built_up_area/builtUpArea_fixGeom.gpkg", encoding="utf-8")
+    urban = gpd.read_file(r"C:\0_PolyU\data-global-ev-2025\__Data\urbanArea\builtUpArea_fixGeom.gpkg", encoding="utf-8")
 
     # Country list
-    countries = pd.read_excel(r"__Data/Global_Country_2025/density.xlsx")
-    # countries.dropna(subset="mainRoad_1000", inplace=True)
-    countries = set(countries["level1"].unique().tolist())
+    countries = {
+        "CAN", "USA", "CHN", "ZAF", "CYP", "IRL", "GRC", "ISL", "ESP", "MLT",
+        "ITA", "PRT", "DEU", "CHE", "BGR", "FRA", "HRV", "ROU", "UKR", "SVN",
+        "HUN", "MDA", "SWE", "AUT", "SVK", "CZE", "POL", "LUX", "BEL", "NLD",
+        "DNK", "LVA", "EST", "NOR", "FIN", "LTU", "JPN", "HKG", "KOR", "MAC",
+        "NZL", "AND", "GBR", "DOM", "EGY", "GIB", "IMN", "MCO", "NAM", "PSE",
+        "SMR", "SWZ", "UGA", "XKX", "AUS", "JOR", "SGP", "URY", "MYS", "MEX",
+        "GEO", "ALB", "SRB", "TWN", "RUS", "ARE", "ABW", "BRA", "IND", "TUR",
+        "CRI", "BLR", "MAR", "PRY", "THA", "KAZ", "ISR", "CHL", "AZE", "BIH",
+        "BHS", "BRB", "PRI", "ARG", "GGY", "ARM", "SAU", "MUS", "TUN", "KEN",
+        "JAM", "GLP", "COL", "JEY", "GTM", "PAN", "REU", "CUW", "TTO", "MKD",
+        "IDN", "NPL", "UZB", "LIE", "PHL", "LKA", "VNM", "RWA", "ECU", "MNE",
+        "TJK", "BOL", "QAT", "BRN", "ALA", "HND", "KHM", "IRQ", "KWT", "BHR",
+        "SLV", "TCA", "OMN", "BWA", "VIR", "LAO", "KGZ", "CYM", "MTQ", "PER",
+        "DMA", "ETH", "GUM", "LSO", "VCT", "FRO", "GRL", "MNG", "NCL", "PYF",
+        "GRD", "BLZ", "ZWE", "PAK", "GHA", "FJI", "BMU", "NIC", "ZMB", "VEN",
+        "LBN", "MDG", "DZA", "LCA", "SJM", "MMR", "NFK", "HTI", "ATG", "CPV",
+        "MLI", "ESH", "CIV", "BTN", "TZA", "SXM", "MNP", "SHN", "MAF", "NGA",
+        "MRT", "BGD", "GUF", "AFG", "SYR", "EUR_Merge"
+    }
 
     # Population raster root path
-    pops = r"__Data/population_All"
+    pops = r"D:\Population_Related\global_2025\population_All"
 
     # Root path of saved roads data with density col (save path//density_roads)
-    RESULT = r"__Data/Global_Country_2025/density_roads"
+    RESULT = r"C:\0_PolyU\data-global-ev-2025\__Data\Global_Country_2025\density_roads"
 
     calPop(countries, (urban, "iso3"), pops, RESULT, 32)
     # # Test

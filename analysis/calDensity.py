@@ -10,7 +10,10 @@ from rasterio.mask import mask
 from rasterio.transform import rowcol
 from concurrent.futures import as_completed, ThreadPoolExecutor, ProcessPoolExecutor
 
-from .__setting import eus, getUtmZone, decayFunc
+try:
+    from .__setting import eus, getUtmZone, decayFunc
+except:
+    from __setting import eus, getUtmZone, decayFunc
 
 BOUNDART = {
     "level1": "iso3_code"
@@ -104,6 +107,10 @@ class calDensity:
         # Process
         excutor = ProcessPoolExecutor(max_workers=self.maxThread) if isinstance(calType, tuple) else ThreadPoolExecutor(max_workers=self.maxThread)
         for unit in self.units:
+            if not os.path.exists(os.path.join(self.roadsPath, "{}.gpkg".format(unit))):
+                bar.update(2)
+                tqdm.write("Sikp {}".format(unit))
+                continue
             bar.set_description(f"Reading file {unit} for {col}")
             evcsGeo = self.evcs.loc[(self.evcs[self.unitsname] == unit), ["geometry"]] if unit != "EUR_Merge" \
                 else self.evcs.loc[(self.evcs[self.unitsname].isin(self.eu)), ["geometry"]]
@@ -143,6 +150,16 @@ class calDensity:
         unit: str
     ) -> tuple[np.floating | None, np.floating | None, bool]:
         EVCSOver10 = False
+
+        # CSV configuation
+        savePath = os.path.join(os.path.dirname(self.densityPath), "giniResult")
+        if not os.path.exists(savePath): os.mkdir(savePath)
+        file = os.path.basename(rasterPath)
+        csvPath = os.path.join(savePath, f"{unit}_{FILE_DICT.get(file, file)}.csv")
+        if os.path.exists(csvPath):
+            df = pd.read_csv(csvPath, encoding="utf-8")
+            # If csv exists, skip
+            return np.nanmedian(df["density"].to_numpy()), np.nanmedian(df.dropna()["gini"].to_numpy()), EVCSOver10
         
         # Get built-up area
         roadsPath = os.path.join(self.roadsPath, "{}.gpkg".format(unit))
@@ -209,9 +226,6 @@ class calDensity:
                 countryResults[i, 1] = self.gini(raster["value"].to_numpy(), raster["evcs"].to_numpy())
 
         # Save gini result for each city
-        savePath = os.path.join(os.path.dirname(self.densityPath), "giniResult")
-        if not os.path.exists(savePath): os.mkdir(savePath)
-        file = os.path.basename(rasterPath)
         df = pd.DataFrame(
             {
                 "density": countryResults[:, 0],
@@ -223,10 +237,10 @@ class calDensity:
         )
         # Save results
         df.to_csv(
-            os.path.join(savePath, f"{unit}_{FILE_DICT.get(file, file)}.csv"), encoding="utf-8"
+            csvPath, encoding="utf-8"
         )
 
-        return np.nanmean(countryResults[:, 0]), np.nanmedian(df.dropna()["gini"].to_numpy()), EVCSOver10
+        return np.nanmedian(countryResults[:, 0]), np.nanmedian(df.dropna()["gini"].to_numpy()), EVCSOver10
     
     @staticmethod
     def calOneUnitByRoad(
@@ -301,7 +315,7 @@ class calDensity:
         return results.sum() / roads["length"].sum()
     
     @staticmethod
-    def gini(indicator: np.ndarray, evcs:np.ndarray) -> np.floating:
+    def gini(indicator: np.ndarray, evcs:np.ndarray) -> float:
         # Special case: if only one grid cell has nonzero indicatior
         # Return nan if total count less than 10, because no significant meaning for gini
         if np.count_nonzero(evcs) < 10: return np.nan
