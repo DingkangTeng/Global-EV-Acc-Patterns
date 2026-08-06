@@ -1,6 +1,5 @@
 import os
 import geopandas as gpd
-import pandas as pd
 import numpy as np
 import rasterio as rio
 from shapely.geometry.base import BaseGeometry
