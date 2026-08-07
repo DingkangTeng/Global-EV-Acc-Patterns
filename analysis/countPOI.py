@@ -47,11 +47,22 @@ def __calByCountry(geom: BaseGeometry, poiPath: str, evcs: gpd.GeoSeries, savePa
 
         subEVCS = evcs[evcs.intersects(geom)]
         if not subEVCS.empty:
-            outImage, _ = mask(
-                src, subEVCS.to_numpy(),
-                crop=True, filled=False, all_touched=True, nodata=0
-            )
-            valuesEVCS, countsEVCS = np.unique(outImage.compressed(), return_counts=True)
+            # outImage, _ = mask(
+            #     src, subEVCS.to_numpy(),
+            #     crop=True, filled=False, all_touched=True, nodata=0
+            # )
+            # valuesEVCS, countsEVCS = np.unique(outImage.compressed(), return_counts=True)
+            coords = [(point.x, point.y) for point in subEVCS.geometry]
+            # 采样每个点所在像元的值
+            sampled_vals = []
+            for xy in coords:
+                for val in src.sample([xy], 1):   # 1 表示只取第一个波段
+                    sampled_vals.append(val[0])
+                    break
+            sampled_vals = np.array(sampled_vals)
+            # 过滤掉 nodata（假设 nodata=0），并统计各 POI 类型的点数
+            valid = sampled_vals != 0
+            valuesEVCS, countsEVCS = np.unique(sampled_vals[valid], return_counts=True)
         else:
             valuesEVCS = countsEVCS = np.array([], dtype=values.dtype)
         dfEVCS = gpd.pd.DataFrame({"poi_counts": valuesEVCS, "counts_with_EVCS": countsEVCS})
@@ -67,10 +78,17 @@ if __name__ == "__main__":
     POI = r"D:\globalPOI_2025"
 
     places = [
-        ("HKG", "China, Hong Kong SAR"),
-        ("SGP", "Central Singapore, Singapore"),
-        ("USA", "Los Angeles, California, United States of America"),
-        ("SWE", "Stockholm, Stockholm, Sweden")
+        # ("HKG", "China, Hong Kong SAR"),
+        # ("SGP", "Central Singapore, Singapore"),
+        # ("USA", "Los Angeles, California, United States of America"),
+        # ("SWE", "Stockholm, Stockholm, Sweden"),
+        # ("BRA", "São Paulo, São Paulo, Brazil"),
+        # ("AUS", "North Adelaide, South Australia, Australia"),
+        # ("USA", "Dallas, Texas, United States of America"),
+        ("TWN", "Taipei, Taiwan Province of China"),
+        ("JPN", "Suginami-Ku, Tokyo, Japan"),
+        # ("AUS", "Lambton - New Lambton, New South Wales, Australia"),
+        # ("CHN", "Beijing Municipality, Beijing Municipality, China")
     ]
 
     countPOI(RESULT, os.path.join(POI, "POI_ALL.tif"), places)
