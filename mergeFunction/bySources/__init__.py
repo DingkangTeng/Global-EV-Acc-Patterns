@@ -10,5 +10,18 @@ from .plugShare import plugShare
 from .tvip import tvip
 from .amap import amap
 from .gogoEV import gogoEV
-from .mergeByMaxRecord import mergeByMaxRecord
-from .merge import merge
+
+__all__ = [
+    "alternativeFuels",
+    "driveSouthAfrica",
+    "europeanCommission",
+    "hk",
+    "electromaps",
+    "aodian",
+    "newZealand",
+    "openChargerMap",
+    "plugShare",
+    "tvip",
+    "amap",
+    "gogoEV",
+]
